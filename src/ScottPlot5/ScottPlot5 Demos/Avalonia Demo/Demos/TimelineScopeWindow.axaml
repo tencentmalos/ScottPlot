@@ -1,0 +1,120 @@
+<Window
+    x:Class="Avalonia_Demo.Demos.TimelineScopeWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ScottPlot="clr-namespace:ScottPlot.Avalonia;assembly=ScottPlot.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:Avalonia_Demo.ViewModels.Demos"
+    Title="Timeline Scope Control"
+    Width="1200"
+    Height="800"
+    d:DesignHeight="800"
+    d:DesignWidth="1200"
+    x:DataType="vm:TimelineScopeViewModel"
+    mc:Ignorable="d">
+    
+    <Grid Background="White" RowDefinitions="auto,200,*">
+        <!-- Control Panel -->
+        <DockPanel Grid.Row="0" Margin="16,16,16,8" Background="#f0f0f0">
+            <StackPanel Orientation="Horizontal" Margin="10">
+                <TextBlock Text="Timeline Scope Demo" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                <TextBlock Text="Drag the selection area in Timeline to control the time range of DetailViews. Use scrollbar to navigate through DetailViews." VerticalAlignment="Center" Margin="0,0,20,0"/>
+                <Button Content="Reset View" Click="ResetView_Click" Margin="10,0"/>
+                <Button Content="Generate New Data" Click="GenerateNewData_Click" Margin="10,0"/>
+            </StackPanel>
+        </DockPanel>
+        
+        <!-- Timeline Area (Always Visible) -->
+        <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Margin="16,0,16,8">
+            <Grid>
+                <TextBlock Text="Timeline (Y-axis locked, X-axis minimum is 0)" 
+                          HorizontalAlignment="Left" 
+                          VerticalAlignment="Top" 
+                          Margin="5" 
+                          FontWeight="Bold" 
+                          Background="White" 
+                          Padding="2"/>
+                <ScottPlot:AvaPlot Name="TimelinePlot" />
+            </Grid>
+        </Border>
+        
+        <!-- DetailView Area with Scrollbar -->
+        <ScrollViewer Grid.Row="2" 
+                      Margin="16,0,16,16" 
+                      VerticalScrollBarVisibility="Auto" 
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Orientation="Vertical">
+                <!-- DetailView 1 -->
+                <Border BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,8" Height="200">
+                    <Grid>
+                        <TextBlock Text="DetailView 1 - Cosine Wave (Synchronized X-axis)" 
+                                  HorizontalAlignment="Left" 
+                                  VerticalAlignment="Top" 
+                                  Margin="5" 
+                                  FontWeight="Bold" 
+                                  Background="White" 
+                                  Padding="2"/>
+                        <ScottPlot:AvaPlot Name="DetailPlot1" />
+                    </Grid>
+                </Border>
+                
+                <!-- DetailView 2 -->
+                <Border BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,8" Height="200">
+                    <Grid>
+                        <TextBlock Text="DetailView 2 - Exponential Decay (Synchronized X-axis)" 
+                                  HorizontalAlignment="Left" 
+                                  VerticalAlignment="Top" 
+                                  Margin="5" 
+                                  FontWeight="Bold" 
+                                  Background="White" 
+                                  Padding="2"/>
+                        <ScottPlot:AvaPlot Name="DetailPlot2" />
+                    </Grid>
+                </Border>
+                
+                <!-- DetailView 3 -->
+                <Border BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,8" Height="200">
+                    <Grid>
+                        <TextBlock Text="DetailView 3 - Random Walk (Synchronized X-axis)" 
+                                  HorizontalAlignment="Left" 
+                                  VerticalAlignment="Top" 
+                                  Margin="5" 
+                                  FontWeight="Bold" 
+                                  Background="White" 
+                                  Padding="2"/>
+                        <ScottPlot:AvaPlot Name="DetailPlot3" />
+                    </Grid>
+                </Border>
+                
+                <!-- DetailView 4 -->
+                <Border BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,8" Height="200">
+                    <Grid>
+                        <TextBlock Text="DetailView 4 - Sine + Cosine (Synchronized X-axis)" 
+                                  HorizontalAlignment="Left" 
+                                  VerticalAlignment="Top" 
+                                  Margin="5" 
+                                  FontWeight="Bold" 
+                                  Background="White" 
+                                  Padding="2"/>
+                        <ScottPlot:AvaPlot Name="DetailPlot4" />
+                    </Grid>
+                </Border>
+                
+                <!-- DetailView 5 -->
+                <Border BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,8" Height="200">
+                    <Grid>
+                        <TextBlock Text="DetailView 5 - Polynomial Function (Synchronized X-axis)" 
+                                  HorizontalAlignment="Left" 
+                                  VerticalAlignment="Top" 
+                                  Margin="5" 
+                                  FontWeight="Bold" 
+                                  Background="White" 
+                                  Padding="2"/>
+                        <ScottPlot:AvaPlot Name="DetailPlot5" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

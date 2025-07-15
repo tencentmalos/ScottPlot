@@ -318,3 +318,4 @@ dev/docfx/api/.manifest
 
 # Vim swap files
 .*.swp
+.DS_Store
