@@ -1,0 +1,51 @@
+<UserControl
+    x:Class="Avalonia_Demo.Controls.TimelineScopeControl"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ScottPlot="clr-namespace:ScottPlot.Avalonia;assembly=ScottPlot.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    d:DesignHeight="600"
+    d:DesignWidth="1000"
+    mc:Ignorable="d">
+    
+    <Grid Background="White" RowDefinitions="200,60,*">
+        <!-- Timeline Area (Always Visible) -->
+        <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,8">
+            <Grid>
+                <TextBlock Text="Timeline (Y-axis locked, X-axis minimum is 0)" 
+                          HorizontalAlignment="Left" 
+                          VerticalAlignment="Top" 
+                          Margin="5" 
+                          FontWeight="Bold" 
+                          Background="White" 
+                          Padding="2"/>
+                <ScottPlot:AvaPlot Name="TimelinePlot" />
+            </Grid>
+        </Border>
+        
+        <!-- Shared X-Axis Area -->
+        <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1,1,1,0" Margin="0,0,0,0">
+            <Grid>
+                <TextBlock Text="Shared X-Axis for DetailViews" 
+                          HorizontalAlignment="Left" 
+                          VerticalAlignment="Top" 
+                          Margin="5" 
+                          FontWeight="Bold" 
+                          Background="White" 
+                          Padding="2"/>
+                <ScottPlot:AvaPlot Name="SharedXAxisPlot" />
+            </Grid>
+        </Border>
+        
+        <!-- DetailView Area with Scrollbar -->
+        <ScrollViewer Grid.Row="2" 
+                      Margin="0,0,0,0" 
+                      VerticalScrollBarVisibility="Auto" 
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Name="DetailViewContainer" Orientation="Vertical">
+                <!-- DetailViews will be dynamically generated here -->
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
