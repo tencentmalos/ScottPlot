@@ -121,7 +121,8 @@ public partial class TimelineScopeControl : UserControl
         CreateDetailViews();
         GenerateData();
         SetupPlots();
-        UpdateDetailViews();
+        ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
+        ChangeSharedAxisRange(scopeStart, scopeEnd);
     }
 
     public void AddDetailView(DetailViewConfig config)
@@ -130,7 +131,8 @@ public partial class TimelineScopeControl : UserControl
         CreateSingleDetailView(detailViewConfigs.Count - 1);
         RegenerateDataForNewView();
         SetupNewDetailView(detailPlots.Count - 1);
-        UpdateDetailViews();
+        ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
+        ChangeSharedAxisRange(scopeStart, scopeEnd);
     }
 
     public void RemoveDetailView(int index)
@@ -164,7 +166,8 @@ public partial class TimelineScopeControl : UserControl
 
         // Re-link axes after removal
         LinkDetailViewAxes();
-        UpdateDetailViews();
+        ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
+        ChangeSharedAxisRange(scopeStart, scopeEnd);
     }
 
     public void GenerateNewData()
@@ -242,7 +245,7 @@ public partial class TimelineScopeControl : UserControl
         TimelinePlot.Plot.Axes.AutoScale();
         TimelinePlot.Plot.Axes.Bottom.Min = 0;
         
-        UpdateDetailViews();
+        ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
         TimelinePlot.Refresh();
     }
 
@@ -419,6 +422,34 @@ public partial class TimelineScopeControl : UserControl
         // Set fixed padding for proper alignment
         PixelPadding fixedPadding = new(left: 60, right: 10, bottom: 30, top: 10);
         SharedXAxisPlot.Plot.Layout.Fixed(fixedPadding);
+        
+        SharedXAxisPlot.PointerWheelChanged += SharedXAxisPlotOnPointerWheelChanged;
+        SharedXAxisPlot.PointerMoved += SharedXAxisPlotOnPointerMoved;
+    }
+
+    private void SharedXAxisPlotOnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var properties = e.GetCurrentPoint(null).Properties;
+        if (properties.IsLeftButtonPressed)
+        {
+            ChangeXAxisBySharedAxisDraged();
+        }
+    }
+
+
+    private void SharedXAxisPlotOnPointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        // throw new NotImplementedException();
+        ChangeXAxisBySharedAxisDraged();
+    }
+
+    private void ChangeXAxisBySharedAxisDraged()
+    {
+        scopeStart = SharedXAxisPlot.Plot.Axes.Bottom.Min;
+        scopeEnd = SharedXAxisPlot.Plot.Axes.Bottom.Max;
+        
+        ChangeTimelineSpanRange(scopeStart, scopeEnd);
+        ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
     }
 
     private void SetupAllDetailPlots()
@@ -484,13 +515,14 @@ public partial class TimelineScopeControl : UserControl
         if (detailPlots.Count == 0) return;
 
         // Link all detail plots to the first one
-        for (int i = 1; i < detailPlots.Count; i++)
+        for (int i = 0; i < detailPlots.Count; i++)
         {
-            detailPlots[0].Plot.Axes.Link(detailPlots[i], x: true, y: false);
+            SharedXAxisPlot.Plot.Axes.Link(detailPlots[i], x: true, y: false);
+            //detailPlots[0].Plot.Axes.Link(detailPlots[i], x: true, y: false);
         }
         
         // Link SharedXAxisPlot to the first detail plot
-        SharedXAxisPlot.Plot.Axes.Link(detailPlots[0], x: true, y: false);
+        //SharedXAxisPlot.Plot.Axes.Link(detailPlots[0], x: true, y: false);
     }
 
     private void ConfigureUserInput()
@@ -549,7 +581,8 @@ public partial class TimelineScopeControl : UserControl
                 scopeStart = 0;
             }
             
-            UpdateDetailViews();
+            ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
+            ChangeSharedAxisRange(scopeStart, scopeEnd);
         }
         
         SpanBeingDragged = null;
@@ -580,7 +613,8 @@ public partial class TimelineScopeControl : UserControl
                 scopeStart = 0;
             }
             
-            UpdateDetailViews();
+            ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
+            ChangeSharedAxisRange(scopeStart, scopeEnd);
             TimelinePlot.Refresh();
         }
         else
@@ -624,29 +658,46 @@ public partial class TimelineScopeControl : UserControl
         plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
     }
 
-    private void UpdateDetailViews()
+    private void ChangeSharedAxisRange(double xMin, double xMax)
+    {
+        SharedXAxisPlot.Plot.Axes.SetLimitsX(xMin, xMax);
+        SharedXAxisPlot.Refresh();
+    }
+
+    private void ChangeDetailPlotXAxisRange(AvaPlot plot, double xMin, double xMax)
+    {
+        // Clear existing axis rules temporarily
+        plot.Plot.Axes.Rules.Clear();
+            
+        // Set new X-axis limits
+        plot.Plot.Axes.SetLimitsX(xMin, xMax);
+        plot.Plot.Axes.AutoScaleY();
+            
+        // Re-add the locked horizontal rule with new limits
+        var lockedHorizontalRule = new ScottPlot.AxisRules.LockedHorizontal(
+            plot.Plot.Axes.Bottom, 
+            xMin, 
+            xMax);
+        plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
+            
+        plot.Refresh();
+    }
+    
+    private void ChangeXAxisRangeForDetailViews(double xMin, double xMax)
     {
         // Update X-axis limits for all detail views and shared X-axis based on scope selection
         foreach (var plot in detailPlots)
         {
-            // Clear existing axis rules temporarily
-            plot.Plot.Axes.Rules.Clear();
-            
-            // Set new X-axis limits
-            plot.Plot.Axes.SetLimitsX(scopeStart, scopeEnd);
-            plot.Plot.Axes.AutoScaleY();
-            
-            // Re-add the locked horizontal rule with new limits
-            var lockedHorizontalRule = new ScottPlot.AxisRules.LockedHorizontal(
-                plot.Plot.Axes.Bottom, 
-                scopeStart, 
-                scopeEnd);
-            plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
-            
-            plot.Refresh();
+            ChangeDetailPlotXAxisRange(plot, xMin, xMax);
         }
-        
-        SharedXAxisPlot.Plot.Axes.SetLimitsX(scopeStart, scopeEnd);
-        SharedXAxisPlot.Refresh();
+
+        // ChangeSharedAxisRange(xMin, xMax);
+    }
+
+    private void ChangeTimelineSpanRange(double xMin, double xMax)
+    {
+        scopeSpan.X1 = xMin;
+        scopeSpan.X2 = xMax;
+        TimelinePlot.Refresh();
     }
 }
