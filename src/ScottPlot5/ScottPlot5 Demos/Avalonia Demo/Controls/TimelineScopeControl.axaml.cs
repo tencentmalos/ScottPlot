@@ -468,11 +468,8 @@ public partial class TimelineScopeControl : UserControl
         // Set the same fixed padding for alignment
         plot.Plot.Layout.Fixed(fixedPadding);
         
-        // Configure mouse wheel for ScrollViewer
-        plot.PointerWheelChanged += HandleDetailViewMouseWheel;
-        
-        // Remove mouse wheel zoom
-        plot.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        // Lock DetailView X-axis interactions - only allow control through SharedXAxis
+        ConfigureDetailViewUserInput(plot);
     }
 
     private void SetupNewDetailView(int index)
@@ -611,21 +608,41 @@ public partial class TimelineScopeControl : UserControl
         return null;
     }
 
-    private void HandleDetailViewMouseWheel(object? sender, PointerWheelEventArgs e)
+
+    private void ConfigureDetailViewUserInput(AvaPlot plot)
     {
-        // Don't let the DetailView plots handle mouse wheel events for zooming.
-        // Instead, let the ScrollViewer handle them for scrolling.
-        // Set e.Handled = false to allow the event to bubble up to ScrollViewer
-        e.Handled = false;
+        // Lock DetailView X-axis using AxisRules - only allow control through SharedXAxis
+        // Get current X-axis limits to lock them
+        AxisLimits currentLimits = plot.Plot.Axes.GetLimits();
+        
+        // Add a LockedHorizontal rule to prevent X-axis changes
+        var lockedHorizontalRule = new ScottPlot.AxisRules.LockedHorizontal(
+            plot.Plot.Axes.Bottom, 
+            currentLimits.Left, 
+            currentLimits.Right);
+        
+        plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
     }
 
     private void UpdateDetailViews()
     {
-        // Set the X-axis limits for all detail views and shared X-axis based on scope selection
+        // Update X-axis limits for all detail views and shared X-axis based on scope selection
         foreach (var plot in detailPlots)
         {
+            // Clear existing axis rules temporarily
+            plot.Plot.Axes.Rules.Clear();
+            
+            // Set new X-axis limits
             plot.Plot.Axes.SetLimitsX(scopeStart, scopeEnd);
             plot.Plot.Axes.AutoScaleY();
+            
+            // Re-add the locked horizontal rule with new limits
+            var lockedHorizontalRule = new ScottPlot.AxisRules.LockedHorizontal(
+                plot.Plot.Axes.Bottom, 
+                scopeStart, 
+                scopeEnd);
+            plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
+            
             plot.Refresh();
         }
         

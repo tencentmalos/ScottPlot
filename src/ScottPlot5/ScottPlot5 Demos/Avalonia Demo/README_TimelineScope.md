@@ -37,22 +37,29 @@
    - 不能拖拽到负数区域
    - 在所有拖拽和缩放操作中都保持此限制
 
+7. **🔒 DetailView X 轴完全锁定**：
+   - 使用 ScottPlot AxisRules.LockedHorizontal 锁定 X 轴
+   - DetailView 的 X 轴平移和缩放功能完全禁用
+   - 仅允许通过 Timeline Scope 和 SharedXAxis 控制 X 轴
+   - 保留 Y 轴的平移和缩放功能以便查看数据细节
+   - 确保所有 DetailView 的 X 轴完全同步
+
 ### 🆕 多数据系列功能：
 
-7. **每个 DetailView 支持多组数据**：
+8. **每个 DetailView 支持多组数据**：
    - ✅ **多条曲线**：每个 DetailView 可以显示多条不同颜色的数据曲线
    - ✅ **独立标签**：每组数据都有自己的标签，显示在图例中
    - ✅ **图例显示**：每个 DetailView 都显示图例，标明各数据系列的名称和颜色
    - ✅ **配置灵活**：每组数据可以有不同的颜色、标签和数据生成器
 
-8. **预定义数据系列配置**：
+9. **预定义数据系列配置**：
    - ✅ **DetailView 1 - 多重波函数**：余弦波 + 正弦波
    - ✅ **DetailView 2 - 指数函数**：指数衰减 + 指数增长（受限）
    - ✅ **DetailView 3 - 随机过程**：随机游走 + 布朗运动 + 白噪声
 
 ### 🆕 动态功能：
 
-9. **动态增删 DetailView**：
+10. **动态增删 DetailView**：
    - ✅ **添加 DetailView**：点击 "Add DetailView" 按钮动态添加新的详细视图
    - ✅ **删除 DetailView**：点击 "Remove Last DetailView" 按钮删除最后一个详细视图
    - ✅ **保持同步**：新增的 DetailView 自动与现有的保持 X 轴同步
