@@ -159,6 +159,19 @@ public partial class TimelineScopeWindow : Window
         TimelinePlot.PointerReleased += OnTimelineMouseUp;
         TimelinePlot.PointerMoved += OnTimelineMouseMove;
         
+        // Configure DetailView plots to use mouse wheel for ScrollViewer instead of zooming
+        DetailPlot1.PointerWheelChanged += HandleDetailViewMouseWheel;
+        DetailPlot2.PointerWheelChanged += HandleDetailViewMouseWheel;
+        DetailPlot3.PointerWheelChanged += HandleDetailViewMouseWheel;
+        DetailPlot4.PointerWheelChanged += HandleDetailViewMouseWheel;
+        DetailPlot5.PointerWheelChanged += HandleDetailViewMouseWheel;
+        
+        // Remove mouse wheel zoom from DetailView plots
+        DetailPlot1.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot2.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot3.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot4.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot5.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
         
         // Configure user input for timeline (disable Y-axis panning)
         // Start with default responses and then modify
@@ -272,6 +285,14 @@ public partial class TimelineScopeWindow : Window
         return null;
     }
 
+    private void HandleDetailViewMouseWheel(object? sender, PointerWheelEventArgs e)
+    {
+        // Don't let the DetailView plots handle mouse wheel events for zooming.
+        // Instead, let the ScrollViewer handle them for scrolling.
+        // Set e.Handled = false to allow the event to bubble up to ScrollViewer
+        e.Handled = false;
+    }
+
     private void UpdateDetailViews()
     {
         // Set the X-axis limits for all detail views based on scope selection
@@ -369,6 +390,12 @@ public partial class TimelineScopeWindow : Window
         DetailPlot1.Plot.Axes.Link(DetailPlot4, x: true, y: false);
         DetailPlot1.Plot.Axes.Link(DetailPlot5, x: true, y: false);
         
+        // Re-configure DetailView plots to use mouse wheel for ScrollViewer instead of zooming
+        DetailPlot1.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot2.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot3.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot4.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
+        DetailPlot5.UserInputProcessor.RemoveAll<ScottPlot.Interactivity.UserActionResponses.MouseWheelZoom>();
         
         // Reset view
         ResetView_Click(sender, e);

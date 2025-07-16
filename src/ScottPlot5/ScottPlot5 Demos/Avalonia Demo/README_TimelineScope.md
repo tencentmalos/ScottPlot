@@ -42,12 +42,15 @@ This demo demonstrates a timeline with draggable scope selection that controls m
 
 1. **Y-axis Locking**: Timeline plot uses `UserInputProcessor` with `LockY = true` for pan actions
 2. **X-axis Constraint**: Timeline X-axis minimum is set to 0, enforced in all drag operations
-3. **Scope Visualization**: Uses `VerticalSpan` with built-in `IsDraggable` and `IsResizable` properties
+3. **Scope Visualization**: Uses `HorizontalSpan` with built-in `IsDraggable` and `IsResizable` properties
 4. **Synchronized Views**: Detail plots use `Plot.Axes.Link()` for X-axis synchronization
 5. **Built-in Dragging**: Uses ScottPlot's native `AxisSpanUnderMouse` functionality for smooth interactions
 6. **Smart Cursor**: Automatically changes cursor based on interaction area (resize vs move)
 7. **Real-time Updates**: Updates detail views in real-time during dragging operations
 8. **Boundary Constraints**: Enforces X >= 0 and data bounds during all operations
+9. **Mouse Wheel Behavior**: Detail views use mouse wheel for ScrollViewer scrolling instead of plot zooming
+   - `PointerWheelChanged` events are handled and marked as processed (`e.Handled = true`)
+   - `MouseWheelZoom` responses are removed from detail view `UserInputProcessor`
 
 ### Data Generation
 
@@ -67,7 +70,10 @@ The demo generates six different data sets:
    - Click and drag the scope boundaries to resize
    - Click and drag within the scope to move it
    - Observe real-time updates in all detail views below
-4. Use the vertical scrollbar to navigate through the detail views
+4. Navigate through the detail views:
+   - Use the vertical scrollbar to scroll through detail views
+   - Use mouse wheel over detail views to scroll (not zoom)
+   - Mouse wheel zooming is disabled in detail views to prioritize scrolling
 5. Use the control buttons to reset or generate new data
 
 This demo showcases advanced ScottPlot features including:
