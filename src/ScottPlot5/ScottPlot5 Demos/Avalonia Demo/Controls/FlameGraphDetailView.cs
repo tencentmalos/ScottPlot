@@ -14,12 +14,12 @@ using ScottPlotColor = ScottPlot.Color;
 namespace Avalonia_Demo.Controls;
 
 /// <summary>
-/// 火焰图详细视图 - 模拟执行栈的倒置火焰图
+/// Flame Graph Detail View - Simulates inverted flame graph of execution stack
 /// </summary>
 public class FlameGraphDetailView
 {
     /// <summary>
-    /// 执行栈帧数据
+    /// Execution stack frame data
     /// </summary>
     public class StackFrame
     {
@@ -33,7 +33,7 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 火焰图配置
+    /// Flame graph configuration
     /// </summary>
     public class FlameGraphConfig
     {
@@ -52,7 +52,7 @@ public class FlameGraphDetailView
     private Tooltip tooltip;
     private AvaPlot plot;
 
-    // 预定义的函数名和模块
+    // Predefined function names and modules
     private static readonly string[] FunctionNames = new[]
     {
         "main()", "processData()", "calculateMetrics()", "renderFrame()", "updateUI()",
@@ -83,7 +83,7 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 生成模拟的火焰图数据
+    /// Generate simulated flame graph data
     /// </summary>
     private FlameGraphConfig GenerateFlameGraphData()
     {
@@ -96,7 +96,7 @@ public class FlameGraphDetailView
             MaxStackDepth = 8
         };
 
-        // 生成主函数调用栈
+        // Generate main function call stack
         GenerateStackFrames(frames, random, 0, 100, 0, config.MaxStackDepth);
 
         config.StackFrames = frames;
@@ -104,7 +104,7 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 递归生成执行栈帧
+    /// Recursively generate execution stack frames
     /// </summary>
     private void GenerateStackFrames(List<StackFrame> frames, Random random, double startTime, double endTime, int currentLevel, int maxLevel)
     {
@@ -115,16 +115,16 @@ public class FlameGraphDetailView
 
         while (currentTime < endTime)
         {
-            // 随机选择函数名和持续时间
+            // Randomly select function name and duration
             var functionName = FunctionNames[random.Next(FunctionNames.Length)];
             var module = ModuleNames[random.Next(ModuleNames.Length)];
             var duration = Math.Min(random.NextDouble() * 15 + 2, endTime - currentTime);
             var frameEndTime = currentTime + duration;
 
-            // 为不同层级使用不同颜色
+            // Use different colors for different levels
             var color = StackColors[currentLevel % StackColors.Length];
             
-            // 添加透明度变化
+            // Add transparency variation
             var alpha = (byte)(180 + (currentLevel * 10) % 75);
             color = new ScottPlotColor(color.R, color.G, color.B, alpha);
 
@@ -140,10 +140,10 @@ public class FlameGraphDetailView
 
             frames.Add(frame);
 
-            // 递归生成子调用（有概率）
+            // Recursively generate sub-calls (with probability)
             if (random.NextDouble() > 0.3 && currentLevel < maxLevel - 1)
             {
-                // 在当前函数执行期间生成子调用
+                // Generate sub-calls during current function execution
                 var subCallStart = currentTime + duration * 0.1;
                 var subCallEnd = frameEndTime - duration * 0.1;
                 
@@ -153,13 +153,13 @@ public class FlameGraphDetailView
                 }
             }
 
-            currentTime = frameEndTime + random.NextDouble() * 2; // 添加小间隔
+            currentTime = frameEndTime + random.NextDouble() * 2; // Add small gap
             functionIndex++;
         }
     }
 
     /// <summary>
-    /// 设置火焰图绘图
+    /// Setup flame graph plotting
     /// </summary>
     private void SetupPlot()
     {
@@ -167,23 +167,23 @@ public class FlameGraphDetailView
         rectangles.Clear();
         labels.Clear();
 
-        // 绘制每个栈帧为矩形
+        // Draw each stack frame as rectangle
         foreach (var frame in config.StackFrames)
         {
-            // 计算矩形位置（倒置火焰图：栈底在上方）
+            // Calculate rectangle position (inverted flame graph: stack bottom at top)
             var x = frame.StartTime;
             var width = frame.Duration;
             var y = (config.MaxStackDepth - frame.StackLevel - 1) * config.FrameHeight;
-            var height = config.FrameHeight * 0.9; // 留一点间隙
+            var height = config.FrameHeight * 0.9; // Leave some gap
 
-            // 创建矩形
+            // Create rectangle
             var rect = plot.Plot.Add.Rectangle(x, x + width, y, y + height);
             rect.FillColor = frame.Color;
             rect.LineColor = ScottPlotColor.FromHex("#333333");
             rect.LineWidth = 0.5f;
             rectangles.Add(rect);
 
-            // 添加文本标签（只有足够宽的矩形才显示文本）
+            // Add text label (only for rectangles wide enough to display text)
             if (width > 5)
             {
                 var text = plot.Plot.Add.Text(frame.FunctionName, x + width / 2, y + height / 2);
@@ -194,37 +194,37 @@ public class FlameGraphDetailView
             }
         }
 
-        // 设置坐标轴
+        // Setup axes
         plot.Plot.Axes.SetLimitsX(config.TimelineStart, config.TimelineEnd);
         plot.Plot.Axes.SetLimitsY(-config.FrameHeight, config.MaxStackDepth * config.FrameHeight);
         
-        // 隐藏Y轴（火焰图通常不显示Y轴刻度）
+        // Hide Y-axis (flame graphs typically don't show Y-axis ticks)
         plot.Plot.Axes.Left.IsVisible = false;
         plot.Plot.Axes.Right.IsVisible = false;
         
-        // 设置X轴标签
+        // Set X-axis label
         plot.Plot.Axes.Bottom.Label.Text = "Time (ms)";
         
-        // 隐藏网格
+        // Hide grid
         plot.Plot.Grid.IsVisible = false;
 
-        // 添加鼠标悬停功能
+        // Add mouse hover functionality
         SetupMouseInteraction();
     }
 
     /// <summary>
-    /// 设置鼠标交互
+    /// Setup mouse interaction
     /// </summary>
     private void SetupMouseInteraction()
     {
-        // 添加十字光标
+        // Add crosshair
         crosshair = plot.Plot.Add.Crosshair(0, 0);
         crosshair.IsVisible = false;
         crosshair.LineColor = Colors.Red;
         crosshair.LineWidth = 1;
         crosshair.LinePattern = LinePattern.Dashed;
 
-        // 添加工具提示
+        // Add tooltip
         tooltip = plot.Plot.Add.Tooltip(new Coordinates(0, 0), "", new Coordinates(0, 0));
         tooltip.IsVisible = false;
         tooltip.FillColor = Color.FromHex("#ffffcc");
@@ -233,13 +233,13 @@ public class FlameGraphDetailView
         tooltip.LabelFontSize = 10;
         tooltip.LabelFontColor = Colors.Black;
 
-        // 绑定鼠标事件
+        // Bind mouse events
         plot.PointerMoved += OnMouseMove;
         plot.PointerExited += OnMouseExit;
     }
 
     /// <summary>
-    /// 鼠标移动事件处理
+    /// Handle mouse move event
     /// </summary>
     private void OnMouseMove(object? sender, PointerEventArgs e)
     {
@@ -247,16 +247,16 @@ public class FlameGraphDetailView
         Pixel mousePixel = new(pos.X, pos.Y);
         Coordinates mouseLocation = plot.Plot.GetCoordinates(mousePixel);
 
-        // 查找鼠标位置下的栈帧
+        // Find stack frame under mouse position
         var hoveredFrame = FindFrameAtPosition(mouseLocation.X, mouseLocation.Y);
 
         if (hoveredFrame != null)
         {
-            // 显示十字光标
+            // Show crosshair
             crosshair.IsVisible = true;
             crosshair.Position = mouseLocation;
 
-            // 构建工具提示文本
+            // Build tooltip text
             var tooltipText = new StringBuilder();
             tooltipText.AppendLine($"Function: {hoveredFrame.FunctionName}");
             tooltipText.AppendLine($"Module: {hoveredFrame.Module}");
@@ -265,7 +265,7 @@ public class FlameGraphDetailView
             tooltipText.AppendLine($"Duration: {hoveredFrame.Duration:F2} ms");
             tooltipText.AppendLine($"Stack Level: {hoveredFrame.StackLevel}");
 
-            // 显示调用栈路径
+            // Show call stack path
             var stackPath = GetStackPath(hoveredFrame);
             if (stackPath.Count > 1)
             {
@@ -278,7 +278,7 @@ public class FlameGraphDetailView
                 }
             }
 
-            // 设置工具提示位置
+            // Set tooltip position
             var tooltipPosition = new Coordinates(
                 mouseLocation.X + 5,
                 mouseLocation.Y + 10
@@ -293,7 +293,7 @@ public class FlameGraphDetailView
         }
         else
         {
-            // 隐藏十字光标和工具提示
+            // Hide crosshair and tooltip
             if (crosshair.IsVisible || tooltip.IsVisible)
             {
                 crosshair.IsVisible = false;
@@ -304,7 +304,7 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 鼠标离开事件处理
+    /// Handle mouse exit event
     /// </summary>
     private void OnMouseExit(object? sender, PointerEventArgs e)
     {
@@ -317,7 +317,7 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 查找指定位置的栈帧
+    /// Find stack frame at specified position
     /// </summary>
     private StackFrame? FindFrameAtPosition(double x, double y)
     {
@@ -336,20 +336,20 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 获取调用栈路径
+    /// Get call stack path
     /// </summary>
     private List<StackFrame> GetStackPath(StackFrame targetFrame)
     {
         var path = new List<StackFrame>();
         
-        // 找到同一时间点的所有栈帧，按层级排序
+        // Find all stack frames at the same time point, sorted by level
         var timePoint = (targetFrame.StartTime + targetFrame.EndTime) / 2;
         var framesAtTime = config.StackFrames
             .Where(f => f.StartTime <= timePoint && f.EndTime >= timePoint)
             .OrderBy(f => f.StackLevel)
             .ToList();
 
-        // 构建从根到目标帧的路径
+        // Build path from root to target frame
         for (int level = 0; level <= targetFrame.StackLevel; level++)
         {
             var frameAtLevel = framesAtTime.FirstOrDefault(f => f.StackLevel == level);
@@ -363,16 +363,82 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 更新时间范围
+    /// Update time range
     /// </summary>
     public void UpdateTimeRange(double startTime, double endTime)
     {
         plot.Plot.Axes.SetLimitsX(startTime, endTime);
+        
+        // Recalculate text label display and font size
+        UpdateTextLabels(startTime, endTime);
+        
         plot.Refresh();
     }
 
     /// <summary>
-    /// 重新生成数据
+    /// Update text label display and font size
+    /// </summary>
+    private void UpdateTextLabels(double visibleStartTime, double visibleEndTime)
+    {
+        var visibleTimeRange = visibleEndTime - visibleStartTime;
+        
+        // Clear existing text labels
+        foreach (var label in labels)
+        {
+            plot.Plot.Remove(label);
+        }
+        labels.Clear();
+
+        // Re-add text labels, adjusting display conditions and font size based on current zoom level
+        foreach (var frame in config.StackFrames)
+        {
+            // Check if stack frame is within visible range
+            if (frame.EndTime < visibleStartTime || frame.StartTime > visibleEndTime)
+                continue;
+
+            var x = frame.StartTime;
+            var width = frame.Duration;
+            var y = (config.MaxStackDepth - frame.StackLevel - 1) * config.FrameHeight;
+            var height = config.FrameHeight * 0.9;
+
+            // Calculate pixel width at current zoom level (approximate)
+            var pixelWidth = (width / visibleTimeRange) * 800; // Assume chart width is about 800 pixels
+            
+            // Adjust text display conditions based on zoom level
+            var minWidthForText = Math.Max(2, visibleTimeRange / 50); // Dynamically adjust minimum width
+            
+            if (width > minWidthForText && pixelWidth > 30) // Ensure enough pixel space to display text
+            {
+                var text = plot.Plot.Add.Text(frame.FunctionName, x + width / 2, y + height / 2);
+                
+                // Dynamically adjust font size based on available space
+                var baseFontSize = Math.Max(8, Math.Min(14, pixelWidth / frame.FunctionName.Length * 1.5));
+                
+                // Further adjust font size based on zoom level
+                var zoomFactor = Math.Min(2.0, Math.Max(0.5, 100.0 / visibleTimeRange));
+                var adjustedFontSize = baseFontSize * Math.Sqrt(zoomFactor);
+                
+                text.LabelFontSize = (float)Math.Max(6, Math.Min(16, adjustedFontSize));
+                text.LabelFontColor = Colors.Black;
+                text.LabelAlignment = Alignment.MiddleCenter;
+                
+                // Truncate text if too long
+                if (pixelWidth < frame.FunctionName.Length * text.LabelFontSize * 0.6)
+                {
+                    var maxChars = Math.Max(3, (int)(pixelWidth / (text.LabelFontSize * 0.6)));
+                    if (frame.FunctionName.Length > maxChars)
+                    {
+                        text.LabelText = frame.FunctionName.Substring(0, maxChars - 2) + "..";
+                    }
+                }
+                
+                labels.Add(text);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Regenerate data
     /// </summary>
     public void RegenerateData()
     {
@@ -382,7 +448,7 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 获取配置信息
+    /// Get configuration information
     /// </summary>
     public FlameGraphConfig GetConfig()
     {
@@ -390,7 +456,7 @@ public class FlameGraphDetailView
     }
 
     /// <summary>
-    /// 设置固定布局
+    /// Set fixed layout
     /// </summary>
     public void SetFixedLayout(PixelPadding padding)
     {
