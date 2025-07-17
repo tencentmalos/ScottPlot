@@ -26,6 +26,7 @@
                     <Button Content="Reset View" Click="ResetView_Click" Margin="0,0,10,0"/>
                     <Button Content="Generate New Data" Click="GenerateNewData_Click" Margin="0,0,10,0"/>
                     <Button Content="Add DetailView" Click="AddDetailView_Click" Margin="0,0,10,0"/>
+                    <Button Content="Add Flame Graph" Click="AddFlameGraphDetailView_Click" Margin="0,0,10,0"/>
                     <Button Content="Remove Last DetailView" Click="RemoveDetailView_Click" Margin="0,0,10,0"/>
                 </StackPanel>
             </StackPanel>

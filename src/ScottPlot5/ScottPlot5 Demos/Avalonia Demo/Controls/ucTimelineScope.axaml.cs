@@ -51,6 +51,9 @@ public partial class ucTimelineScope : UserControl
     private double scopeStart = 20;
     private double scopeEnd = 80;
 
+    // Flame graph detail views
+    private List<FlameGraphDetailView> flameGraphViews = new();
+
     // DetailView configurations
     public List<DetailViewConfig> detailViewConfigs = new()
     {
@@ -137,6 +140,37 @@ public partial class ucTimelineScope : UserControl
         RegenerateDataForNewView();
         SetupNewDetailView(detailPlots.Count - 1);
         ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
+        ChangeSharedAxisRange(scopeStart, scopeEnd);
+    }
+
+    public void AddFlameGraphDetailView(string title = "Flame Graph - Execution Stack")
+    {
+        // Create a special DetailView for flame graph
+        var flameGraphConfig = new DetailViewConfig
+        {
+            Title = title,
+            DataSeries = new List<DataSeriesConfig>() // Empty data series for flame graph
+        };
+
+        detailViewConfigs.Add(flameGraphConfig);
+        CreateSingleDetailView(detailViewConfigs.Count - 1);
+        
+        // Get the newly created plot
+        var newPlot = detailPlots[detailPlots.Count - 1];
+        
+        // Create flame graph view for this plot
+        var flameGraphView = new FlameGraphDetailView(newPlot);
+        flameGraphViews.Add(flameGraphView);
+        
+        // Set fixed layout to match other detail views
+        PixelPadding fixedPadding = new(left: 60, right: 10, bottom: 30, top: 10);
+        flameGraphView.SetFixedLayout(fixedPadding);
+        
+        // Update time range for the flame graph
+        flameGraphView.UpdateTimeRange(scopeStart, scopeEnd);
+        
+        // Link axes
+        LinkDetailViewAxes();
         ChangeSharedAxisRange(scopeStart, scopeEnd);
     }
 
@@ -230,6 +264,12 @@ public partial class ucTimelineScope : UserControl
         
         // Re-setup all detail plots
         SetupAllDetailPlots();
+        
+        // Regenerate flame graph data
+        foreach (var flameGraphView in flameGraphViews)
+        {
+            flameGraphView.RegenerateData();
+        }
         
         // Reset view
         ResetView();
@@ -763,6 +803,12 @@ public partial class ucTimelineScope : UserControl
         foreach (var plot in detailPlots)
         {
             ChangeDetailPlotXAxisRange(plot, xMin, xMax);
+        }
+
+        // Update flame graph views time range
+        foreach (var flameGraphView in flameGraphViews)
+        {
+            flameGraphView.UpdateTimeRange(xMin, xMax);
         }
 
         // ChangeSharedAxisRange(xMin, xMax);

@@ -176,4 +176,10 @@ public partial class TimelineScopeWindow : Window
             nextConfigIndex = Math.Max(0, nextConfigIndex - 1);
         }
     }
+
+    private void AddFlameGraphDetailView_Click(object? sender, RoutedEventArgs e)
+    {
+        TimelineScopeControl.AddFlameGraphDetailView($"Flame Graph {nextConfigIndex + 1} - Execution Stack");
+        nextConfigIndex++;
+    }
 }
