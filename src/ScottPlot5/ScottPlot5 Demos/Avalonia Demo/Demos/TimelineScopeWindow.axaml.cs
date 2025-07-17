@@ -24,20 +24,20 @@ public partial class TimelineScopeWindow : Window
     private TimelineScopeViewModel TypedDataContext => (DataContext as TimelineScopeViewModel) ?? throw new ArgumentException(nameof(DataContext));
 
     // Sample configurations for new DetailViews
-    private readonly TimelineScopeControl.DetailViewConfig[] sampleConfigs = new[]
+    private readonly ucTimelineScope.DetailViewConfig[] sampleConfigs = new[]
     {
-        new TimelineScopeControl.DetailViewConfig 
+        new ucTimelineScope.DetailViewConfig 
         { 
             Title = "DetailView - Trigonometric Functions",
-            DataSeries = new List<TimelineScopeControl.DataSeriesConfig>
+            DataSeries = new List<ucTimelineScope.DataSeriesConfig>
             {
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Sine Wave", 
                     LineColor = Colors.Cyan,
                     DataGenerator = (i, _) => Math.Sin(i * 0.08) * 1.5 + (new Random(123).NextDouble() - 0.5) * 0.3
                 },
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Tangent Wave", 
                     LineColor = Colors.Navy,
@@ -45,18 +45,18 @@ public partial class TimelineScopeWindow : Window
                 }
             }
         },
-        new TimelineScopeControl.DetailViewConfig 
+        new ucTimelineScope.DetailViewConfig 
         { 
             Title = "DetailView - Mathematical Functions",
-            DataSeries = new List<TimelineScopeControl.DataSeriesConfig>
+            DataSeries = new List<ucTimelineScope.DataSeriesConfig>
             {
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Logarithmic Function", 
                     LineColor = Colors.Magenta,
                     DataGenerator = (i, _) => Math.Log(i + 1) * 0.5 + (new Random(456).NextDouble() - 0.5) * 0.2
                 },
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Square Root Function", 
                     LineColor = Colors.Teal,
@@ -64,24 +64,24 @@ public partial class TimelineScopeWindow : Window
                 }
             }
         },
-        new TimelineScopeControl.DetailViewConfig 
+        new ucTimelineScope.DetailViewConfig 
         { 
             Title = "DetailView - Signal Processing",
-            DataSeries = new List<TimelineScopeControl.DataSeriesConfig>
+            DataSeries = new List<ucTimelineScope.DataSeriesConfig>
             {
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Square Wave", 
                     LineColor = Colors.Yellow,
                     DataGenerator = (i, _) => Math.Sign(Math.Sin(i * 0.1)) * 2 + (new Random(789).NextDouble() - 0.5) * 0.4
                 },
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Sawtooth Wave", 
                     LineColor = Colors.LightBlue,
                     DataGenerator = (i, _) => (i % 100) / 50.0 - 1.0 + (new Random(790).NextDouble() - 0.5) * 0.3
                 },
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Triangle Wave", 
                     LineColor = Colors.Lime,
@@ -89,18 +89,18 @@ public partial class TimelineScopeWindow : Window
                 }
             }
         },
-        new TimelineScopeControl.DetailViewConfig 
+        new ucTimelineScope.DetailViewConfig 
         { 
             Title = "DetailView - Physics Simulation",
-            DataSeries = new List<TimelineScopeControl.DataSeriesConfig>
+            DataSeries = new List<ucTimelineScope.DataSeriesConfig>
             {
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Damped Oscillation", 
                     LineColor = Colors.Pink,
                     DataGenerator = (i, _) => Math.Exp(-i * 0.01) * Math.Cos(i * 0.2) + (new Random(131415).NextDouble() - 0.5) * 0.2
                 },
-                new TimelineScopeControl.DataSeriesConfig 
+                new ucTimelineScope.DataSeriesConfig 
                 { 
                     Label = "Forced Oscillation", 
                     LineColor = Colors.Coral,
@@ -141,18 +141,18 @@ public partial class TimelineScopeWindow : Window
             var random = new Random();
             var colors = new[] { Colors.Red, Colors.Green, Colors.Blue, Colors.Orange, Colors.Purple, Colors.Brown, Colors.Cyan, Colors.Magenta, Colors.Yellow, Colors.Pink };
             
-            var config = new TimelineScopeControl.DetailViewConfig
+            var config = new ucTimelineScope.DetailViewConfig
             {
                 Title = $"DetailView {nextConfigIndex + 1} - Random Functions",
-                DataSeries = new List<TimelineScopeControl.DataSeriesConfig>
+                DataSeries = new List<ucTimelineScope.DataSeriesConfig>
                 {
-                    new TimelineScopeControl.DataSeriesConfig
+                    new ucTimelineScope.DataSeriesConfig
                     {
                         Label = "Random Function 1",
                         LineColor = colors[random.Next(colors.Length)],
                         DataGenerator = (i, _) => Math.Sin(i * random.NextDouble() * 0.1) * random.NextDouble() * 3 + (random.NextDouble() - 0.5) * 0.5
                     },
-                    new TimelineScopeControl.DataSeriesConfig
+                    new ucTimelineScope.DataSeriesConfig
                     {
                         Label = "Random Function 2",
                         LineColor = colors[random.Next(colors.Length)],

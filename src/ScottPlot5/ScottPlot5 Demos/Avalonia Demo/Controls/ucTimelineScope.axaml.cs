@@ -8,10 +8,11 @@ using ScottPlot.Avalonia;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace Avalonia_Demo.Controls;
 
-public partial class TimelineScopeControl : UserControl
+public partial class ucTimelineScope : UserControl
 {
     // Data series configuration for a single DetailView
     public class DataSeriesConfig
@@ -41,6 +42,10 @@ public partial class TimelineScopeControl : UserControl
     // UI elements arrays
     private List<AvaPlot> detailPlots = new();
     private List<Border> detailBorders = new();
+
+    // Mouse hover functionality
+    private List<Crosshair> detailCrosshairs = new();
+    private List<Tooltip> detailTooltips = new();
 
     // Scope selection variables
     private double scopeStart = 20;
@@ -114,7 +119,7 @@ public partial class TimelineScopeControl : UserControl
         }
     };
 
-    public TimelineScopeControl()
+    public ucTimelineScope()
     {
         InitializeComponent();
         
@@ -180,6 +185,10 @@ public partial class TimelineScopeControl : UserControl
         {
             plot.Plot.Clear();
         }
+        
+        // Clear crosshairs and tooltips lists
+        detailCrosshairs.Clear();
+        detailTooltips.Clear();
         
         // Recreate timeline signal
         timelineSignal = TimelinePlot.Plot.Add.Signal(timelineData);
@@ -485,6 +494,44 @@ public partial class TimelineScopeControl : UserControl
         
         detailSignals.Add(seriesSignals);
 
+        // Add crosshair for mouse tracking
+        var crosshair = plot.Plot.Add.Crosshair(0, 0);
+        crosshair.IsVisible = false;
+        crosshair.MarkerShape = MarkerShape.OpenCircle;
+        crosshair.MarkerSize = 8;
+        crosshair.LineColor = Colors.Gray;
+        crosshair.LineWidth = 1;
+        crosshair.LinePattern = LinePattern.Dashed;
+        
+        // Ensure we have enough crosshairs for all detail views
+        if (detailCrosshairs.Count <= index)
+        {
+            while (detailCrosshairs.Count <= index)
+            {
+                detailCrosshairs.Add(null!);
+            }
+        }
+        detailCrosshairs[index] = crosshair;
+
+        // Add tooltip for displaying data values
+        var tooltip = plot.Plot.Add.Tooltip(new Coordinates(0, 0), "", new Coordinates(0, 0));
+        tooltip.IsVisible = false;
+        tooltip.FillColor = Color.FromHex("#ffffcc");
+        tooltip.LineColor = Colors.Black;
+        tooltip.LineWidth = 1;
+        tooltip.LabelFontSize = 10;
+        tooltip.LabelFontColor = Colors.Black;
+        
+        // Ensure we have enough tooltips for all detail views
+        if (detailTooltips.Count <= index)
+        {
+            while (detailTooltips.Count <= index)
+            {
+                detailTooltips.Add(null!);
+            }
+        }
+        detailTooltips[index] = tooltip;
+
         // Show legend for this DetailView
         plot.Plot.ShowLegend();
         
@@ -498,6 +545,10 @@ public partial class TimelineScopeControl : UserControl
         
         // Set the same fixed padding for alignment
         plot.Plot.Layout.Fixed(fixedPadding);
+        
+        // Add mouse move event handler for this detail plot
+        plot.PointerMoved += (sender, e) => OnDetailPlotMouseMove(sender, e, index);
+        plot.PointerExited += (sender, e) => OnDetailPlotMouseExit(sender, e, index);
         
         // Lock DetailView X-axis interactions - only allow control through SharedXAxis
         ConfigureDetailViewUserInput(plot);
@@ -515,14 +566,14 @@ public partial class TimelineScopeControl : UserControl
         if (detailPlots.Count == 0) return;
 
         // Link all detail plots to the first one
-        for (int i = 0; i < detailPlots.Count; i++)
+        for (int i = 1; i < detailPlots.Count; i++)
         {
-            SharedXAxisPlot.Plot.Axes.Link(detailPlots[i], x: true, y: false);
+            SharedXAxisPlot.Plot.Axes.Link(detailPlots[0], x: true, y: false);
             //detailPlots[0].Plot.Axes.Link(detailPlots[i], x: true, y: false);
         }
         
         // Link SharedXAxisPlot to the first detail plot
-        //SharedXAxisPlot.Plot.Axes.Link(detailPlots[0], x: true, y: false);
+        SharedXAxisPlot.Plot.Axes.Link(detailPlots[0], x: true, y: false);
     }
 
     private void ConfigureUserInput()
@@ -666,20 +717,43 @@ public partial class TimelineScopeControl : UserControl
 
     private void ChangeDetailPlotXAxisRange(AvaPlot plot, double xMin, double xMax)
     {
-        // Clear existing axis rules temporarily
-        plot.Plot.Axes.Rules.Clear();
-            
-        // Set new X-axis limits
+        // Use a safer approach that doesn't modify rules during rendering
+        // First, set the limits directly
         plot.Plot.Axes.SetLimitsX(xMin, xMax);
         plot.Plot.Axes.AutoScaleY();
+        
+        // Find and update existing LockedHorizontal rule instead of clearing and re-adding
+        var existingRule = plot.Plot.Axes.Rules.OfType<ScottPlot.AxisRules.LockedHorizontal>().FirstOrDefault();
+        if (existingRule != null)
+        {
+            // Remove the old rule safely
+            var rulesList = plot.Plot.Axes.Rules.ToList();
+            rulesList.Remove(existingRule);
+            plot.Plot.Axes.Rules.Clear();
             
-        // Re-add the locked horizontal rule with new limits
-        var lockedHorizontalRule = new ScottPlot.AxisRules.LockedHorizontal(
-            plot.Plot.Axes.Bottom, 
-            xMin, 
-            xMax);
-        plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
+            // Add updated rule
+            var newRule = new ScottPlot.AxisRules.LockedHorizontal(
+                plot.Plot.Axes.Bottom, 
+                xMin, 
+                xMax);
             
+            // Add all rules back
+            foreach (var rule in rulesList)
+            {
+                plot.Plot.Axes.Rules.Add(rule);
+            }
+            plot.Plot.Axes.Rules.Add(newRule);
+        }
+        else
+        {
+            // Add new rule if none exists
+            var lockedHorizontalRule = new ScottPlot.AxisRules.LockedHorizontal(
+                plot.Plot.Axes.Bottom, 
+                xMin, 
+                xMax);
+            plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
+        }
+        
         plot.Refresh();
     }
     
@@ -699,5 +773,101 @@ public partial class TimelineScopeControl : UserControl
         scopeSpan.X1 = xMin;
         scopeSpan.X2 = xMax;
         TimelinePlot.Refresh();
+    }
+
+    private void OnDetailPlotMouseMove(object? sender, PointerEventArgs e, int plotIndex)
+    {
+        if (plotIndex >= detailPlots.Count || plotIndex >= detailCrosshairs.Count || plotIndex >= detailTooltips.Count)
+            return;
+
+        var plot = detailPlots[plotIndex];
+        var crosshair = detailCrosshairs[plotIndex];
+        var tooltip = detailTooltips[plotIndex];
+        var config = detailViewConfigs[plotIndex];
+
+        // Get mouse position and convert to coordinates
+        var pos = e.GetPosition(plot);
+        Pixel mousePixel = new(pos.X, pos.Y);
+        Coordinates mouseLocation = plot.Plot.GetCoordinates(mousePixel);
+
+        // Find the nearest data points for all series in this DetailView
+        var nearestPoints = new List<(DataPoint point, string seriesLabel, Color seriesColor)>();
+        double maxDistance = 15; // Maximum distance to consider a point "near"
+
+        for (int seriesIndex = 0; seriesIndex < detailSignals[plotIndex].Count; seriesIndex++)
+        {
+            var signal = detailSignals[plotIndex][seriesIndex];
+            var seriesConfig = config.DataSeries[seriesIndex];
+            
+            // Get nearest point for this series
+            DataPoint nearest = signal.GetNearestX(mouseLocation, plot.Plot.LastRender, (float)maxDistance);
+            
+            if (nearest.IsReal)
+            {
+                nearestPoints.Add((nearest, seriesConfig.Label, seriesConfig.LineColor));
+            }
+        }
+
+        if (nearestPoints.Count > 0)
+        {
+            // Find the closest point among all series
+            var closestPoint = nearestPoints.OrderBy(p => Math.Abs(p.point.X - mouseLocation.X)).First();
+            
+            // Show crosshair at the closest point
+            crosshair.IsVisible = true;
+            crosshair.Position = closestPoint.point.Coordinates;
+            crosshair.MarkerColor = closestPoint.seriesColor;
+
+            // Build tooltip text with all nearby points
+            var tooltipText = new StringBuilder();
+            tooltipText.AppendLine($"X: {closestPoint.point.X:F2}");
+            tooltipText.AppendLine();
+
+            foreach (var (point, label, color) in nearestPoints.OrderBy(p => p.seriesLabel))
+            {
+                tooltipText.AppendLine($"{label}: {point.Y:F3}");
+            }
+
+            // Position tooltip near the mouse but offset to avoid covering data
+            var tooltipPosition = new Coordinates(
+                closestPoint.point.X + (mouseLocation.X > closestPoint.point.X ? 5 : -5),
+                closestPoint.point.Y + 0.1 * (plot.Plot.Axes.GetLimits().Top - plot.Plot.Axes.GetLimits().Bottom)
+            );
+
+            tooltip.LabelText = tooltipText.ToString().Trim();
+            tooltip.TipLocation = closestPoint.point.Coordinates;
+            tooltip.LabelLocation = tooltipPosition;
+            tooltip.IsVisible = true;
+
+            plot.Refresh();
+        }
+        else
+        {
+            // Hide crosshair and tooltip when no point is near
+            if (crosshair.IsVisible || tooltip.IsVisible)
+            {
+                crosshair.IsVisible = false;
+                tooltip.IsVisible = false;
+                plot.Refresh();
+            }
+        }
+    }
+
+    private void OnDetailPlotMouseExit(object? sender, PointerEventArgs e, int plotIndex)
+    {
+        if (plotIndex >= detailCrosshairs.Count || plotIndex >= detailTooltips.Count)
+            return;
+
+        var crosshair = detailCrosshairs[plotIndex];
+        var tooltip = detailTooltips[plotIndex];
+        var plot = detailPlots[plotIndex];
+
+        // Hide crosshair and tooltip when mouse exits the plot
+        if (crosshair.IsVisible || tooltip.IsVisible)
+        {
+            crosshair.IsVisible = false;
+            tooltip.IsVisible = false;
+            plot.Refresh();
+        }
     }
 }

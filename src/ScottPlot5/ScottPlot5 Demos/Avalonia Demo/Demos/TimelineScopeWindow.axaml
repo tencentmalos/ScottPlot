@@ -32,6 +32,6 @@
         </DockPanel>
         
         <!-- Timeline Scope Control -->
-        <controls:TimelineScopeControl Grid.Row="1" Name="TimelineScopeControl" Margin="16,0,16,16"/>
+        <controls:ucTimelineScope Grid.Row="1" Name="TimelineScopeControl" Margin="16,0,16,16"/>
     </Grid>
 </Window>
