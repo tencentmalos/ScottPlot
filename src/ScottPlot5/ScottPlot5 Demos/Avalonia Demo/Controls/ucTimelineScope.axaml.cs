@@ -14,49 +14,36 @@ namespace Avalonia_Demo.Controls;
 
 public partial class ucTimelineScope : UserControl
 {
-    // Data series configuration for a single DetailView
-    public class DataSeriesConfig
-    {
-        public string Label { get; set; } = "";
-        public Color LineColor { get; set; } = Colors.Blue;
-        public Func<int, double[], double> DataGenerator { get; set; } = (i, _) => 0;
-        public Func<int, (double x, double y)>? XYDataGenerator { get; set; } = null; // For 2D array data with custom X,Y coordinates
-        public bool Use2DArray { get; set; } = false; // Flag to indicate if this series uses 2D array data
-    }
-
-    // DetailView configuration that can contain multiple data series
-    public class DetailViewConfig
-    {
-        public string Title { get; set; } = "";
-        public List<DataSeriesConfig> DataSeries { get; set; } = new();
-    }
-
     // Data arrays for the plots
     private double[] timelineData;
     private double[] xValues;
-    private List<List<double[]>> detailDataArrays = new(); // [DetailView][DataSeries][DataPoints]
-    private List<List<(double[] x, double[] y)>> detail2DDataArrays = new(); // [DetailView][DataSeries][(X,Y)]
 
     // Plottable objects
     private Signal timelineSignal;
-    private List<List<Signal>> detailSignals = new(); // [DetailView][DataSeries]
-    private List<List<Scatter>> detailScatters = new(); // [DetailView][DataSeries] for 2D array data
     private HorizontalSpan scopeSpan;
 
     // UI elements arrays
     private List<AvaPlot> detailPlots = new();
     private List<Border> detailBorders = new();
 
-    // Mouse hover functionality
-    private List<List<Crosshair>> detailCrosshairs = new(); // [DetailView][DataSeries]
-    private List<Tooltip> detailTooltips = new();
-
     // Scope selection variables
     private double scopeStart = 20;
     private double scopeEnd = 80;
 
-    // Flame graph detail views
+    // Detail view instances (using the new separated classes)
+    private List<ValueDetailView1D> value1DViews = new();
+    private List<ValueDetailView2D> value2DViews = new();
     private List<FlameGraphDetailView> flameGraphViews = new();
+
+    // Track which type each detail view is
+    private List<DetailViewType> detailViewTypes = new();
+
+    public enum DetailViewType
+    {
+        Value1D,
+        Value2D,
+        FlameGraph
+    }
 
     // DetailView configurations
     public List<DetailViewConfig> detailViewConfigs = new()
@@ -155,10 +142,10 @@ public partial class ucTimelineScope : UserControl
     {
         detailViewConfigs.Add(config);
         CreateSingleDetailView(detailViewConfigs.Count - 1);
-        RegenerateDataForNewView();
-        SetupNewDetailView(detailPlots.Count - 1);
+        GenerateDataForNewView(detailViewConfigs.Count - 1);
         ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
         ChangeSharedAxisRange(scopeStart, scopeEnd);
+        LinkDetailViewAxes();
     }
 
     public void AddFlameGraphDetailView(string title = "Flame Graph - Execution Stack")
@@ -179,6 +166,7 @@ public partial class ucTimelineScope : UserControl
         // Create flame graph view for this plot
         var flameGraphView = new FlameGraphDetailView(newPlot);
         flameGraphViews.Add(flameGraphView);
+        detailViewTypes.Add(DetailViewType.FlameGraph);
         
         // Set fixed layout to match other detail views
         PixelPadding fixedPadding = new(left: 60, right: 10, bottom: 30, top: 10);
@@ -190,11 +178,54 @@ public partial class ucTimelineScope : UserControl
         // Link axes
         LinkDetailViewAxes();
         ChangeSharedAxisRange(scopeStart, scopeEnd);
+        ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
     }
 
     public void RemoveDetailView(int index)
     {
         if (index < 0 || index >= detailViewConfigs.Count) return;
+
+        // Get the plot reference before removing it
+        AvaPlot plotToRemove = null;
+        if (index < detailPlots.Count)
+        {
+            plotToRemove = detailPlots[index];
+        }
+
+        // Get the view type and config title before removing
+        DetailViewType viewType = DetailViewType.Value1D;
+        string configTitle = "";
+        if (index < detailViewTypes.Count)
+        {
+            viewType = detailViewTypes[index];
+        }
+        if (index < detailViewConfigs.Count)
+        {
+            configTitle = detailViewConfigs[index].Title;
+        }
+
+        // Remove from detail view instances based on type
+        switch (viewType)
+        {
+            case DetailViewType.Value1D:
+                if (plotToRemove != null)
+                {
+                    var view1DIndex = value1DViews.FindIndex(v => v.GetPlot() == plotToRemove);
+                    if (view1DIndex >= 0) value1DViews.RemoveAt(view1DIndex);
+                }
+                break;
+            case DetailViewType.Value2D:
+                if (plotToRemove != null)
+                {
+                    var view2DIndex = value2DViews.FindIndex(v => v.GetPlot() == plotToRemove);
+                    if (view2DIndex >= 0) value2DViews.RemoveAt(view2DIndex);
+                }
+                break;
+            case DetailViewType.FlameGraph:
+                var flameIndex = flameGraphViews.FindIndex(v => v.GetConfig().Title == configTitle);
+                if (flameIndex >= 0) flameGraphViews.RemoveAt(flameIndex);
+                break;
+        }
 
         // Remove from configurations
         detailViewConfigs.RemoveAt(index);
@@ -211,14 +242,10 @@ public partial class ucTimelineScope : UserControl
             detailPlots.RemoveAt(index);
         }
 
-        if (index < detailSignals.Count)
+        // Remove from view types
+        if (index < detailViewTypes.Count)
         {
-            detailSignals.RemoveAt(index);
-        }
-
-        if (index < detailDataArrays.Count)
-        {
-            detailDataArrays.RemoveAt(index);
+            detailViewTypes.RemoveAt(index);
         }
 
         // Re-link axes after removal
@@ -231,43 +258,13 @@ public partial class ucTimelineScope : UserControl
     {
         GenerateData();
         
-        // Clear and recreate plots with new data
+        // Clear and recreate timeline plot
         TimelinePlot.Plot.Clear();
-        foreach (var plot in detailPlots)
-        {
-            plot.Plot.Clear();
-        }
-        
-        // Clear crosshairs and tooltips lists
-        detailCrosshairs.Clear();
-        detailTooltips.Clear();
         
         // Recreate timeline signal
         timelineSignal = TimelinePlot.Plot.Add.Signal(timelineData);
         timelineSignal.Color = Colors.Blue;
         timelineSignal.LineWidth = 2;
-        
-        // Recreate detail signals
-        detailSignals.Clear();
-        for (int i = 0; i < detailPlots.Count; i++)
-        {
-            var seriesSignals = new List<Signal>();
-            var config = detailViewConfigs[i];
-            
-            for (int j = 0; j < config.DataSeries.Count; j++)
-            {
-                var signal = detailPlots[i].Plot.Add.Signal(detailDataArrays[i][j]);
-                signal.Color = config.DataSeries[j].LineColor;
-                signal.LineWidth = 2;
-                signal.LegendText = config.DataSeries[j].Label;
-                seriesSignals.Add(signal);
-            }
-            
-            detailSignals.Add(seriesSignals);
-            
-            // Show legend for this DetailView
-            detailPlots[i].Plot.ShowLegend();
-        }
         
         // Recreate scope span
         scopeSpan = TimelinePlot.Plot.Add.HorizontalSpan(scopeStart, scopeEnd);
@@ -280,8 +277,11 @@ public partial class ucTimelineScope : UserControl
         // Re-setup SharedXAxisPlot
         SetupSharedXAxisPlot();
         
-        // Re-setup all detail plots
-        SetupAllDetailPlots();
+        // Regenerate data for all detail views
+        for (int i = 0; i < detailViewTypes.Count; i++)
+        {
+            GenerateDataForView(i);
+        }
         
         // Regenerate flame graph data
         foreach (var flameGraphView in flameGraphViews)
@@ -321,6 +321,10 @@ public partial class ucTimelineScope : UserControl
         DetailViewContainer.Children.Clear();
         detailPlots.Clear();
         detailBorders.Clear();
+        value1DViews.Clear();
+        value2DViews.Clear();
+        flameGraphViews.Clear();
+        detailViewTypes.Clear();
 
         for (int i = 0; i < detailViewConfigs.Count; i++)
         {
@@ -372,6 +376,29 @@ public partial class ucTimelineScope : UserControl
         // Store references
         detailPlots.Add(plot);
         detailBorders.Add(border);
+
+        // Determine view type and create appropriate detail view instance
+        bool has2DData = config.DataSeries.Any(s => s.Use2DArray);
+        
+        if (has2DData)
+        {
+            var view2D = new ValueDetailView2D(plot, config);
+            value2DViews.Add(view2D);
+            detailViewTypes.Add(DetailViewType.Value2D);
+        }
+        else
+        {
+            var view1D = new ValueDetailView1D(plot, config);
+            value1DViews.Add(view1D);
+            detailViewTypes.Add(DetailViewType.Value1D);
+        }
+
+        // Set fixed layout
+        PixelPadding fixedPadding = new(left: 60, right: 10, bottom: 30, top: 10);
+        plot.Plot.Layout.Fixed(fixedPadding);
+        
+        // Configure user input
+        ConfigureDetailViewUserInput(plot);
     }
 
     private void GenerateData()
@@ -380,35 +407,6 @@ public partial class ucTimelineScope : UserControl
         int pointCount = 1000;
         xValues = new double[pointCount];
         timelineData = new double[pointCount];
-        detailDataArrays.Clear();
-        detail2DDataArrays.Clear();
-
-        // Initialize data arrays for each detail view and its data series
-        for (int i = 0; i < detailViewConfigs.Count; i++)
-        {
-            var detailViewData = new List<double[]>();
-            var detail2DViewData = new List<(double[] x, double[] y)>();
-            var config = detailViewConfigs[i];
-            
-            for (int j = 0; j < config.DataSeries.Count; j++)
-            {
-                var seriesConfig = config.DataSeries[j];
-                if (seriesConfig.Use2DArray && seriesConfig.XYDataGenerator != null)
-                {
-                    // For 2D array data, create separate X and Y arrays
-                    detail2DViewData.Add((new double[pointCount], new double[pointCount]));
-                    detailViewData.Add(new double[pointCount]); // Still need this for compatibility
-                }
-                else
-                {
-                    detailViewData.Add(new double[pointCount]);
-                    detail2DViewData.Add((new double[0], new double[0])); // Empty for non-2D data
-                }
-            }
-            
-            detailDataArrays.Add(detailViewData);
-            detail2DDataArrays.Add(detail2DViewData);
-        }
 
         Random rand = new Random(42);
         
@@ -418,63 +416,88 @@ public partial class ucTimelineScope : UserControl
             
             // Timeline data: combination of sine wave and noise
             timelineData[i] = Math.Sin(i * 0.02) + (rand.NextDouble() - 0.5) * 0.3;
-            
-            // Generate data for each detail view and its data series
-            for (int detailIndex = 0; detailIndex < detailViewConfigs.Count; detailIndex++)
-            {
-                var config = detailViewConfigs[detailIndex];
-                for (int seriesIndex = 0; seriesIndex < config.DataSeries.Count; seriesIndex++)
-                {
-                    var seriesConfig = config.DataSeries[seriesIndex];
-                    
-                    if (seriesConfig.Use2DArray && seriesConfig.XYDataGenerator != null)
-                    {
-                        // Generate 2D array data with custom X,Y coordinates
-                        var (x, y) = seriesConfig.XYDataGenerator(i);
-                        detail2DDataArrays[detailIndex][seriesIndex].x[i] = x;
-                        detail2DDataArrays[detailIndex][seriesIndex].y[i] = y;
-                        detailDataArrays[detailIndex][seriesIndex][i] = y; // Store Y for compatibility
-                    }
-                    else
-                    {
-                        // Generate regular 1D data
-                        detailDataArrays[detailIndex][seriesIndex][i] = seriesConfig.DataGenerator(i, detailDataArrays[detailIndex][seriesIndex]);
-                    }
-                }
-            }
+        }
+
+        // Generate data for all detail views
+        for (int i = 0; i < detailViewTypes.Count; i++)
+        {
+            GenerateDataForView(i);
         }
     }
 
-    private void RegenerateDataForNewView()
+    private void GenerateDataForView(int index)
     {
-        if (detailDataArrays.Count < detailViewConfigs.Count)
+        if (index >= detailViewTypes.Count) return;
+
+        int pointCount = timelineData?.Length ?? 1000;
+        var viewType = detailViewTypes[index];
+
+        switch (viewType)
         {
-            int pointCount = timelineData?.Length ?? 1000;
-            var config = detailViewConfigs[detailViewConfigs.Count - 1];
-            var detailViewData = new List<double[]>();
-            
-            for (int j = 0; j < config.DataSeries.Count; j++)
-            {
-                var newData = new double[pointCount];
-                var seriesConfig = config.DataSeries[j];
-                
-                for (int i = 0; i < pointCount; i++)
+            case DetailViewType.Value1D:
+                var view1DIndex = GetView1DIndex(index);
+                if (view1DIndex >= 0 && view1DIndex < value1DViews.Count)
                 {
-                    newData[i] = seriesConfig.DataGenerator(i, newData);
+                    value1DViews[view1DIndex].GenerateData(pointCount);
+                    value1DViews[view1DIndex].UpdatePlot();
                 }
-                
-                detailViewData.Add(newData);
-            }
-            
-            detailDataArrays.Add(detailViewData);
+                break;
+            case DetailViewType.Value2D:
+                var view2DIndex = GetView2DIndex(index);
+                if (view2DIndex >= 0 && view2DIndex < value2DViews.Count)
+                {
+                    value2DViews[view2DIndex].GenerateData(pointCount);
+                    value2DViews[view2DIndex].UpdatePlot();
+                }
+                break;
+            case DetailViewType.FlameGraph:
+                // Flame graphs generate their own data
+                break;
         }
+    }
+
+    private void GenerateDataForNewView(int index)
+    {
+        GenerateDataForView(index);
+    }
+
+    private int GetView1DIndex(int detailViewIndex)
+    {
+        int count = 0;
+        for (int i = 0; i < detailViewIndex && i < detailViewTypes.Count; i++)
+        {
+            if (detailViewTypes[i] == DetailViewType.Value1D)
+                count++;
+        }
+        return count;
+    }
+
+    private int GetView2DIndex(int detailViewIndex)
+    {
+        int count = 0;
+        for (int i = 0; i < detailViewIndex && i < detailViewTypes.Count; i++)
+        {
+            if (detailViewTypes[i] == DetailViewType.Value2D)
+                count++;
+        }
+        return count;
+    }
+
+    private int GetFlameGraphIndex(int detailViewIndex)
+    {
+        int count = 0;
+        for (int i = 0; i < detailViewIndex && i < detailViewTypes.Count; i++)
+        {
+            if (detailViewTypes[i] == DetailViewType.FlameGraph)
+                count++;
+        }
+        return count;
     }
 
     private void SetupPlots()
     {
         SetupTimelinePlot();
         SetupSharedXAxisPlot();
-        SetupAllDetailPlots();
         LinkDetailViewAxes();
         ConfigureUserInput();
     }
@@ -530,10 +553,8 @@ public partial class ucTimelineScope : UserControl
         }
     }
 
-
     private void SharedXAxisPlotOnPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        // throw new NotImplementedException();
         ChangeXAxisBySharedAxisDraged();
     }
 
@@ -546,161 +567,15 @@ public partial class ucTimelineScope : UserControl
         ChangeXAxisRangeForDetailViews(scopeStart, scopeEnd);
     }
 
-    private void SetupAllDetailPlots()
-    {
-        detailSignals.Clear();
-        PixelPadding fixedPadding = new(left: 60, right: 10, bottom: 30, top: 10);
-
-        for (int i = 0; i < detailPlots.Count; i++)
-        {
-            SetupSingleDetailPlot(i, fixedPadding);
-        }
-    }
-
-    private void SetupSingleDetailPlot(int index, PixelPadding fixedPadding)
-    {
-        var plot = detailPlots[index];
-        var config = detailViewConfigs[index];
-        var detailViewData = detailDataArrays[index];
-
-        // Setup detail plot signals/scatters for each data series
-        var seriesSignals = new List<Signal>();
-        var seriesScatters = new List<Scatter>();
-        
-        for (int j = 0; j < config.DataSeries.Count; j++)
-        {
-            var seriesConfig = config.DataSeries[j];
-            
-            if (seriesConfig.Use2DArray && detail2DDataArrays.Count > index && detail2DDataArrays[index].Count > j)
-            {
-                // Use Scatter plot for 2D array data
-                var xData = detail2DDataArrays[index][j].x;
-                var yData = detail2DDataArrays[index][j].y;
-                
-                var scatter = plot.Plot.Add.Scatter(xData, yData);
-                scatter.Color = seriesConfig.LineColor;
-                scatter.LineWidth = 2;
-                scatter.MarkerSize = 0; // No markers, just lines
-                scatter.LegendText = seriesConfig.Label;
-                seriesScatters.Add(scatter);
-                
-                // Add empty signal for compatibility
-                seriesSignals.Add(null!);
-            }
-            else
-            {
-                // Use Signal plot for regular 1D data
-                var data = detailViewData[j];
-                
-                var signal = plot.Plot.Add.Signal(data);
-                signal.Color = seriesConfig.LineColor;
-                signal.LineWidth = 2;
-                signal.LegendText = seriesConfig.Label;
-                seriesSignals.Add(signal);
-                
-                // Add empty scatter for compatibility
-                seriesScatters.Add(null!);
-            }
-        }
-        
-        detailSignals.Add(seriesSignals);
-        
-        // Ensure we have enough scatter lists
-        if (detailScatters.Count <= index)
-        {
-            while (detailScatters.Count <= index)
-            {
-                detailScatters.Add(new List<Scatter>());
-            }
-        }
-        detailScatters[index] = seriesScatters;
-
-        // Add crosshairs for mouse tracking - one for each data series
-        var seriesCrosshairs = new List<Crosshair>();
-        for (int j = 0; j < config.DataSeries.Count; j++)
-        {
-            var crosshair = plot.Plot.Add.Crosshair(0, 0);
-            crosshair.IsVisible = false;
-            crosshair.MarkerShape = MarkerShape.OpenCircle;
-            crosshair.MarkerSize = 8;
-            crosshair.LineColor = config.DataSeries[j].LineColor;
-            crosshair.MarkerColor = config.DataSeries[j].LineColor;
-            crosshair.LineWidth = 1;
-            crosshair.LinePattern = LinePattern.Dashed;
-            seriesCrosshairs.Add(crosshair);
-        }
-        
-        // Ensure we have enough crosshairs for all detail views
-        if (detailCrosshairs.Count <= index)
-        {
-            while (detailCrosshairs.Count <= index)
-            {
-                detailCrosshairs.Add(new List<Crosshair>());
-            }
-        }
-        detailCrosshairs[index] = seriesCrosshairs;
-
-        // Add tooltip for displaying data values
-        var tooltip = plot.Plot.Add.Tooltip(new Coordinates(0, 0), "", new Coordinates(0, 0));
-        tooltip.IsVisible = false;
-        tooltip.FillColor = Color.FromHex("#ffffcc");
-        tooltip.LineColor = Colors.Black;
-        tooltip.LineWidth = 1;
-        tooltip.LabelFontSize = 10;
-        tooltip.LabelFontColor = Colors.Black;
-        
-        // Ensure we have enough tooltips for all detail views
-        if (detailTooltips.Count <= index)
-        {
-            while (detailTooltips.Count <= index)
-            {
-                detailTooltips.Add(null!);
-            }
-        }
-        detailTooltips[index] = tooltip;
-
-        // Show legend for this DetailView
-        plot.Plot.ShowLegend();
-        
-        // Position legend in the upper right corner
-        plot.Plot.Legend.Alignment = Alignment.UpperRight;
-        plot.Plot.Legend.BackgroundColor = Color.FromHex("#ffffff");
-        plot.Plot.Legend.OutlineColor = Color.FromHex("#cccccc");
-
-        // Hide X-axis for detail plot
-        plot.Plot.Axes.Bottom.IsVisible = false;
-        
-        // Set the same fixed padding for alignment
-        plot.Plot.Layout.Fixed(fixedPadding);
-        
-        // Add mouse move event handler for this detail plot
-        plot.PointerMoved += (sender, e) => OnDetailPlotMouseMove(sender, e, index);
-        plot.PointerExited += (sender, e) => OnDetailPlotMouseExit(sender, e, index);
-        
-        // Lock DetailView X-axis interactions - only allow control through SharedXAxis
-        ConfigureDetailViewUserInput(plot);
-    }
-
-    private void SetupNewDetailView(int index)
-    {
-        PixelPadding fixedPadding = new(left: 60, right: 10, bottom: 30, top: 10);
-        SetupSingleDetailPlot(index, fixedPadding);
-        LinkDetailViewAxes();
-    }
-
     private void LinkDetailViewAxes()
     {
         if (detailPlots.Count == 0) return;
 
-        // Link all detail plots to the first one
-        for (int i = 1; i < detailPlots.Count; i++)
+        // Link all detail plots to the SharedXAxisPlot
+        for (int i = 0; i < detailPlots.Count; i++)
         {
-            SharedXAxisPlot.Plot.Axes.Link(detailPlots[0], x: true, y: false);
-            //detailPlots[0].Plot.Axes.Link(detailPlots[i], x: true, y: false);
+            detailPlots[i].Plot.Axes.Link(SharedXAxisPlot, x: true, y: false);
         }
-        
-        // Link SharedXAxisPlot to the first detail plot
-        SharedXAxisPlot.Plot.Axes.Link(detailPlots[0], x: true, y: false);
     }
 
     private void ConfigureUserInput()
@@ -820,7 +695,6 @@ public partial class ucTimelineScope : UserControl
         return null;
     }
 
-
     private void ConfigureDetailViewUserInput(AvaPlot plot)
     {
         // Lock DetailView X-axis using AxisRules - only allow control through SharedXAxis
@@ -841,64 +715,39 @@ public partial class ucTimelineScope : UserControl
         SharedXAxisPlot.Plot.Axes.SetLimitsX(xMin, xMax);
         SharedXAxisPlot.Refresh();
     }
-
-    private void ChangeDetailPlotXAxisRange(AvaPlot plot, double xMin, double xMax)
-    {
-        // Use a safer approach that doesn't modify rules during rendering
-        // First, set the limits directly
-        plot.Plot.Axes.SetLimitsX(xMin, xMax);
-        plot.Plot.Axes.AutoScaleY();
-        
-        // Find and update existing LockedHorizontal rule instead of clearing and re-adding
-        var existingRule = plot.Plot.Axes.Rules.OfType<ScottPlot.AxisRules.LockedHorizontal>().FirstOrDefault();
-        if (existingRule != null)
-        {
-            // Remove the old rule safely
-            var rulesList = plot.Plot.Axes.Rules.ToList();
-            rulesList.Remove(existingRule);
-            plot.Plot.Axes.Rules.Clear();
-            
-            // Add updated rule
-            var newRule = new ScottPlot.AxisRules.LockedHorizontal(
-                plot.Plot.Axes.Bottom, 
-                xMin, 
-                xMax);
-            
-            // Add all rules back
-            foreach (var rule in rulesList)
-            {
-                plot.Plot.Axes.Rules.Add(rule);
-            }
-            plot.Plot.Axes.Rules.Add(newRule);
-        }
-        else
-        {
-            // Add new rule if none exists
-            var lockedHorizontalRule = new ScottPlot.AxisRules.LockedHorizontal(
-                plot.Plot.Axes.Bottom, 
-                xMin, 
-                xMax);
-            plot.Plot.Axes.Rules.Add(lockedHorizontalRule);
-        }
-        
-        plot.Refresh();
-    }
     
     private void ChangeXAxisRangeForDetailViews(double xMin, double xMax)
     {
-        // Update X-axis limits for all detail views and shared X-axis based on scope selection
-        foreach (var plot in detailPlots)
+        // Update X-axis limits for all detail views based on scope selection
+        for (int i = 0; i < detailViewTypes.Count; i++)
         {
-            ChangeDetailPlotXAxisRange(plot, xMin, xMax);
+            var viewType = detailViewTypes[i];
+            
+            switch (viewType)
+            {
+                case DetailViewType.Value1D:
+                    var view1DIndex = GetView1DIndex(i);
+                    if (view1DIndex >= 0 && view1DIndex < value1DViews.Count)
+                    {
+                        value1DViews[view1DIndex].UpdateXAxisRange(xMin, xMax);
+                    }
+                    break;
+                case DetailViewType.Value2D:
+                    var view2DIndex = GetView2DIndex(i);
+                    if (view2DIndex >= 0 && view2DIndex < value2DViews.Count)
+                    {
+                        value2DViews[view2DIndex].UpdateXAxisRange(xMin, xMax);
+                    }
+                    break;
+                case DetailViewType.FlameGraph:
+                    var flameIndex = GetFlameGraphIndex(i);
+                    if (flameIndex >= 0 && flameIndex < flameGraphViews.Count)
+                    {
+                        flameGraphViews[flameIndex].UpdateTimeRange(xMin, xMax);
+                    }
+                    break;
+            }
         }
-
-        // Update flame graph views time range
-        foreach (var flameGraphView in flameGraphViews)
-        {
-            flameGraphView.UpdateTimeRange(xMin, xMax);
-        }
-
-        // ChangeSharedAxisRange(xMin, xMax);
     }
 
     private void ChangeTimelineSpanRange(double xMin, double xMax)
@@ -906,160 +755,5 @@ public partial class ucTimelineScope : UserControl
         scopeSpan.X1 = xMin;
         scopeSpan.X2 = xMax;
         TimelinePlot.Refresh();
-    }
-
-    private void OnDetailPlotMouseMove(object? sender, PointerEventArgs e, int plotIndex)
-    {
-        if (plotIndex >= detailPlots.Count || plotIndex >= detailCrosshairs.Count || plotIndex >= detailTooltips.Count)
-            return;
-
-        var plot = detailPlots[plotIndex];
-        var crosshairs = detailCrosshairs[plotIndex];
-        var tooltip = detailTooltips[plotIndex];
-        var config = detailViewConfigs[plotIndex];
-
-        // Get mouse position and convert to coordinates
-        var pos = e.GetPosition(plot);
-        Pixel mousePixel = new(pos.X, pos.Y);
-        Coordinates mouseLocation = plot.Plot.GetCoordinates(mousePixel);
-
-        // Find the nearest data points for all series in this DetailView
-        var nearestPoints = new List<(DataPoint point, string seriesLabel, Color seriesColor, int seriesIndex)>();
-        double maxDistance = 15; // Maximum distance to consider a point "near"
-
-        for (int seriesIndex = 0; seriesIndex < config.DataSeries.Count; seriesIndex++)
-        {
-            var seriesConfig = config.DataSeries[seriesIndex];
-            DataPoint nearest = new();
-            
-            if (seriesConfig.Use2DArray && plotIndex < detailScatters.Count && seriesIndex < detailScatters[plotIndex].Count)
-            {
-                // Handle 2D array data (Scatter plot)
-                var scatter = detailScatters[plotIndex][seriesIndex];
-                if (scatter != null)
-                {
-                    nearest = scatter.GetNearestX(mouseLocation, plot.Plot.LastRender, (float)maxDistance);
-                }
-            }
-            else if (plotIndex < detailSignals.Count && seriesIndex < detailSignals[plotIndex].Count)
-            {
-                // Handle regular 1D data (Signal plot)
-                var signal = detailSignals[plotIndex][seriesIndex];
-                if (signal != null)
-                {
-                    nearest = signal.GetNearestX(mouseLocation, plot.Plot.LastRender, (float)maxDistance);
-                }
-            }
-            
-            if (nearest.IsReal)
-            {
-                nearestPoints.Add((nearest, seriesConfig.Label, seriesConfig.LineColor, seriesIndex));
-            }
-        }
-
-        if (nearestPoints.Count > 0)
-        {
-            // Show crosshairs for all nearby points
-            for (int i = 0; i < crosshairs.Count; i++)
-            {
-                var crosshair = crosshairs[i];
-                var nearestPoint = nearestPoints.FirstOrDefault(p => p.seriesIndex == i);
-                
-                if (nearestPoint.point.IsReal)
-                {
-                    crosshair.IsVisible = true;
-                    crosshair.Position = nearestPoint.point.Coordinates;
-                    crosshair.MarkerColor = nearestPoint.seriesColor;
-                }
-                else
-                {
-                    crosshair.IsVisible = false;
-                }
-            }
-
-            // Find the closest point among all series for tooltip positioning
-            var closestPoint = nearestPoints.OrderBy(p => Math.Abs(p.point.X - mouseLocation.X)).First();
-
-            // Build tooltip text with all nearby points
-            var tooltipText = new StringBuilder();
-            tooltipText.AppendLine($"X: {closestPoint.point.X:F2}");
-            tooltipText.AppendLine();
-
-            foreach (var (point, label, color, _) in nearestPoints.OrderBy(p => p.seriesLabel))
-            {
-                tooltipText.AppendLine($"{label}: {point.Y:F3}");
-            }
-
-            // Position tooltip near the mouse but offset to avoid covering data
-            var tooltipPosition = new Coordinates(
-                closestPoint.point.X + (mouseLocation.X > closestPoint.point.X ? 5 : -5),
-                closestPoint.point.Y + 0.1 * (plot.Plot.Axes.GetLimits().Top - plot.Plot.Axes.GetLimits().Bottom)
-            );
-
-            tooltip.LabelText = tooltipText.ToString().Trim();
-            tooltip.TipLocation = closestPoint.point.Coordinates;
-            tooltip.LabelLocation = tooltipPosition;
-            tooltip.IsVisible = true;
-
-            plot.Refresh();
-        }
-        else
-        {
-            // Hide all crosshairs and tooltip when no point is near
-            bool needsRefresh = false;
-            
-            foreach (var crosshair in crosshairs)
-            {
-                if (crosshair.IsVisible)
-                {
-                    crosshair.IsVisible = false;
-                    needsRefresh = true;
-                }
-            }
-            
-            if (tooltip.IsVisible)
-            {
-                tooltip.IsVisible = false;
-                needsRefresh = true;
-            }
-            
-            if (needsRefresh)
-            {
-                plot.Refresh();
-            }
-        }
-    }
-
-    private void OnDetailPlotMouseExit(object? sender, PointerEventArgs e, int plotIndex)
-    {
-        if (plotIndex >= detailCrosshairs.Count || plotIndex >= detailTooltips.Count)
-            return;
-
-        var crosshairs = detailCrosshairs[plotIndex];
-        var tooltip = detailTooltips[plotIndex];
-        var plot = detailPlots[plotIndex];
-
-        // Hide all crosshairs and tooltip when mouse exits the plot
-        bool needsRefresh = false;
-        
-        foreach (var crosshair in crosshairs)
-        {
-            if (crosshair.IsVisible)
-            {
-                crosshair.IsVisible = false;
-                needsRefresh = true;
-            }
-        }
-        
-        if (tooltip.IsVisible)
-        {
-            tooltip.IsVisible = false;
-            needsRefresh = true;
-        }
-        
-        if (needsRefresh)
-        {
-            plot.Refresh();
-        }
     }
 }
