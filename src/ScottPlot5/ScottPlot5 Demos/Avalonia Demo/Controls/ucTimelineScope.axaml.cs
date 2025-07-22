@@ -20,6 +20,8 @@ public partial class ucTimelineScope : UserControl
         public string Label { get; set; } = "";
         public Color LineColor { get; set; } = Colors.Blue;
         public Func<int, double[], double> DataGenerator { get; set; } = (i, _) => 0;
+        public Func<int, (double x, double y)>? XYDataGenerator { get; set; } = null; // For 2D array data with custom X,Y coordinates
+        public bool Use2DArray { get; set; } = false; // Flag to indicate if this series uses 2D array data
     }
 
     // DetailView configuration that can contain multiple data series
@@ -33,10 +35,12 @@ public partial class ucTimelineScope : UserControl
     private double[] timelineData;
     private double[] xValues;
     private List<List<double[]>> detailDataArrays = new(); // [DetailView][DataSeries][DataPoints]
+    private List<List<(double[] x, double[] y)>> detail2DDataArrays = new(); // [DetailView][DataSeries][(X,Y)]
 
     // Plottable objects
     private Signal timelineSignal;
     private List<List<Signal>> detailSignals = new(); // [DetailView][DataSeries]
+    private List<List<Scatter>> detailScatters = new(); // [DetailView][DataSeries] for 2D array data
     private HorizontalSpan scopeSpan;
 
     // UI elements arrays
@@ -44,7 +48,7 @@ public partial class ucTimelineScope : UserControl
     private List<Border> detailBorders = new();
 
     // Mouse hover functionality
-    private List<Crosshair> detailCrosshairs = new();
+    private List<List<Crosshair>> detailCrosshairs = new(); // [DetailView][DataSeries]
     private List<Tooltip> detailTooltips = new();
 
     // Scope selection variables
@@ -59,20 +63,34 @@ public partial class ucTimelineScope : UserControl
     {
         new DetailViewConfig 
         { 
-            Title = "DetailView 1 - Multiple Wave Functions",
+            Title = "DetailView 1 - 2D Array Data (Custom X,Y Coordinates)",
             DataSeries = new List<DataSeriesConfig>
             {
                 new DataSeriesConfig 
                 { 
-                    Label = "Cosine Wave", 
+                    Label = "Non-uniform X Cosine", 
                     LineColor = Colors.Red,
-                    DataGenerator = (i, _) => Math.Cos(i * 0.05) * 2 + (new Random(42).NextDouble() - 0.5) * 0.3
+                    Use2DArray = true,
+                    XYDataGenerator = (i) => {
+                        // Generate non-uniform X coordinates (logarithmic spacing)
+                        double x = Math.Log(i + 1) * 10 + (new Random(42 + i).NextDouble() - 0.5) * 2;
+                        // Generate Y coordinates based on cosine function
+                        double y = Math.Cos(x * 0.1) * 2 + (new Random(42 + i).NextDouble() - 0.5) * 0.3;
+                        return (x, y);
+                    }
                 },
                 new DataSeriesConfig 
                 { 
-                    Label = "Sine Wave", 
+                    Label = "Exponential X Sine", 
                     LineColor = Colors.Blue,
-                    DataGenerator = (i, _) => Math.Sin(i * 0.04) * 1.5 + (new Random(43).NextDouble() - 0.5) * 0.2
+                    Use2DArray = true,
+                    XYDataGenerator = (i) => {
+                        // Generate exponential X coordinates
+                        double x = Math.Pow(1.02, i) - 1 + (new Random(43 + i).NextDouble() - 0.5) * 0.5;
+                        // Generate Y coordinates based on sine function
+                        double y = Math.Sin(x * 0.05) * 1.5 + (new Random(43 + i).NextDouble() - 0.5) * 0.2;
+                        return (x, y);
+                    }
                 }
             }
         },
@@ -363,19 +381,33 @@ public partial class ucTimelineScope : UserControl
         xValues = new double[pointCount];
         timelineData = new double[pointCount];
         detailDataArrays.Clear();
+        detail2DDataArrays.Clear();
 
         // Initialize data arrays for each detail view and its data series
         for (int i = 0; i < detailViewConfigs.Count; i++)
         {
             var detailViewData = new List<double[]>();
+            var detail2DViewData = new List<(double[] x, double[] y)>();
             var config = detailViewConfigs[i];
             
             for (int j = 0; j < config.DataSeries.Count; j++)
             {
-                detailViewData.Add(new double[pointCount]);
+                var seriesConfig = config.DataSeries[j];
+                if (seriesConfig.Use2DArray && seriesConfig.XYDataGenerator != null)
+                {
+                    // For 2D array data, create separate X and Y arrays
+                    detail2DViewData.Add((new double[pointCount], new double[pointCount]));
+                    detailViewData.Add(new double[pointCount]); // Still need this for compatibility
+                }
+                else
+                {
+                    detailViewData.Add(new double[pointCount]);
+                    detail2DViewData.Add((new double[0], new double[0])); // Empty for non-2D data
+                }
             }
             
             detailDataArrays.Add(detailViewData);
+            detail2DDataArrays.Add(detail2DViewData);
         }
 
         Random rand = new Random(42);
@@ -394,7 +426,20 @@ public partial class ucTimelineScope : UserControl
                 for (int seriesIndex = 0; seriesIndex < config.DataSeries.Count; seriesIndex++)
                 {
                     var seriesConfig = config.DataSeries[seriesIndex];
-                    detailDataArrays[detailIndex][seriesIndex][i] = seriesConfig.DataGenerator(i, detailDataArrays[detailIndex][seriesIndex]);
+                    
+                    if (seriesConfig.Use2DArray && seriesConfig.XYDataGenerator != null)
+                    {
+                        // Generate 2D array data with custom X,Y coordinates
+                        var (x, y) = seriesConfig.XYDataGenerator(i);
+                        detail2DDataArrays[detailIndex][seriesIndex].x[i] = x;
+                        detail2DDataArrays[detailIndex][seriesIndex].y[i] = y;
+                        detailDataArrays[detailIndex][seriesIndex][i] = y; // Store Y for compatibility
+                    }
+                    else
+                    {
+                        // Generate regular 1D data
+                        detailDataArrays[detailIndex][seriesIndex][i] = seriesConfig.DataGenerator(i, detailDataArrays[detailIndex][seriesIndex]);
+                    }
                 }
             }
         }
@@ -518,40 +563,82 @@ public partial class ucTimelineScope : UserControl
         var config = detailViewConfigs[index];
         var detailViewData = detailDataArrays[index];
 
-        // Setup detail plot signals for each data series
+        // Setup detail plot signals/scatters for each data series
         var seriesSignals = new List<Signal>();
+        var seriesScatters = new List<Scatter>();
+        
         for (int j = 0; j < config.DataSeries.Count; j++)
         {
             var seriesConfig = config.DataSeries[j];
-            var data = detailViewData[j];
             
-            var signal = plot.Plot.Add.Signal(data);
-            signal.Color = seriesConfig.LineColor;
-            signal.LineWidth = 2;
-            signal.LegendText = seriesConfig.Label;
-            seriesSignals.Add(signal);
+            if (seriesConfig.Use2DArray && detail2DDataArrays.Count > index && detail2DDataArrays[index].Count > j)
+            {
+                // Use Scatter plot for 2D array data
+                var xData = detail2DDataArrays[index][j].x;
+                var yData = detail2DDataArrays[index][j].y;
+                
+                var scatter = plot.Plot.Add.Scatter(xData, yData);
+                scatter.Color = seriesConfig.LineColor;
+                scatter.LineWidth = 2;
+                scatter.MarkerSize = 0; // No markers, just lines
+                scatter.LegendText = seriesConfig.Label;
+                seriesScatters.Add(scatter);
+                
+                // Add empty signal for compatibility
+                seriesSignals.Add(null!);
+            }
+            else
+            {
+                // Use Signal plot for regular 1D data
+                var data = detailViewData[j];
+                
+                var signal = plot.Plot.Add.Signal(data);
+                signal.Color = seriesConfig.LineColor;
+                signal.LineWidth = 2;
+                signal.LegendText = seriesConfig.Label;
+                seriesSignals.Add(signal);
+                
+                // Add empty scatter for compatibility
+                seriesScatters.Add(null!);
+            }
         }
         
         detailSignals.Add(seriesSignals);
+        
+        // Ensure we have enough scatter lists
+        if (detailScatters.Count <= index)
+        {
+            while (detailScatters.Count <= index)
+            {
+                detailScatters.Add(new List<Scatter>());
+            }
+        }
+        detailScatters[index] = seriesScatters;
 
-        // Add crosshair for mouse tracking
-        var crosshair = plot.Plot.Add.Crosshair(0, 0);
-        crosshair.IsVisible = false;
-        crosshair.MarkerShape = MarkerShape.OpenCircle;
-        crosshair.MarkerSize = 8;
-        crosshair.LineColor = Colors.Gray;
-        crosshair.LineWidth = 1;
-        crosshair.LinePattern = LinePattern.Dashed;
+        // Add crosshairs for mouse tracking - one for each data series
+        var seriesCrosshairs = new List<Crosshair>();
+        for (int j = 0; j < config.DataSeries.Count; j++)
+        {
+            var crosshair = plot.Plot.Add.Crosshair(0, 0);
+            crosshair.IsVisible = false;
+            crosshair.MarkerShape = MarkerShape.OpenCircle;
+            crosshair.MarkerSize = 8;
+            crosshair.LineColor = config.DataSeries[j].LineColor;
+            crosshair.MarkerColor = config.DataSeries[j].LineColor;
+            crosshair.LineWidth = 1;
+            crosshair.LinePattern = LinePattern.Dashed;
+            seriesCrosshairs.Add(crosshair);
+        }
         
         // Ensure we have enough crosshairs for all detail views
         if (detailCrosshairs.Count <= index)
         {
             while (detailCrosshairs.Count <= index)
             {
-                detailCrosshairs.Add(null!);
+                detailCrosshairs.Add(new List<Crosshair>());
             }
         }
-        detailCrosshairs[index] = crosshair;
+        detailCrosshairs[index] = seriesCrosshairs;
 
         // Add tooltip for displaying data values
         var tooltip = plot.Plot.Add.Tooltip(new Coordinates(0, 0), "", new Coordinates(0, 0));
@@ -827,7 +914,7 @@ public partial class ucTimelineScope : UserControl
             return;
 
         var plot = detailPlots[plotIndex];
-        var crosshair = detailCrosshairs[plotIndex];
+        var crosshairs = detailCrosshairs[plotIndex];
         var tooltip = detailTooltips[plotIndex];
         var config = detailViewConfigs[plotIndex];
 
@@ -837,39 +924,68 @@ public partial class ucTimelineScope : UserControl
         Coordinates mouseLocation = plot.Plot.GetCoordinates(mousePixel);
 
         // Find the nearest data points for all series in this DetailView
-        var nearestPoints = new List<(DataPoint point, string seriesLabel, Color seriesColor)>();
+        var nearestPoints = new List<(DataPoint point, string seriesLabel, Color seriesColor, int seriesIndex)>();
         double maxDistance = 15; // Maximum distance to consider a point "near"
 
-        for (int seriesIndex = 0; seriesIndex < detailSignals[plotIndex].Count; seriesIndex++)
+        for (int seriesIndex = 0; seriesIndex < config.DataSeries.Count; seriesIndex++)
         {
-            var signal = detailSignals[plotIndex][seriesIndex];
             var seriesConfig = config.DataSeries[seriesIndex];
+            DataPoint nearest = new();
             
-            // Get nearest point for this series
-            DataPoint nearest = signal.GetNearestX(mouseLocation, plot.Plot.LastRender, (float)maxDistance);
+            if (seriesConfig.Use2DArray && plotIndex < detailScatters.Count && seriesIndex < detailScatters[plotIndex].Count)
+            {
+                // Handle 2D array data (Scatter plot)
+                var scatter = detailScatters[plotIndex][seriesIndex];
+                if (scatter != null)
+                {
+                    nearest = scatter.GetNearestX(mouseLocation, plot.Plot.LastRender, (float)maxDistance);
+                }
+            }
+            else if (plotIndex < detailSignals.Count && seriesIndex < detailSignals[plotIndex].Count)
+            {
+                // Handle regular 1D data (Signal plot)
+                var signal = detailSignals[plotIndex][seriesIndex];
+                if (signal != null)
+                {
+                    nearest = signal.GetNearestX(mouseLocation, plot.Plot.LastRender, (float)maxDistance);
+                }
+            }
             
             if (nearest.IsReal)
             {
-                nearestPoints.Add((nearest, seriesConfig.Label, seriesConfig.LineColor));
+                nearestPoints.Add((nearest, seriesConfig.Label, seriesConfig.LineColor, seriesIndex));
             }
         }
 
         if (nearestPoints.Count > 0)
         {
-            // Find the closest point among all series
+            // Show crosshairs for all nearby points
+            for (int i = 0; i < crosshairs.Count; i++)
+            {
+                var crosshair = crosshairs[i];
+                var nearestPoint = nearestPoints.FirstOrDefault(p => p.seriesIndex == i);
+                
+                if (nearestPoint.point.IsReal)
+                {
+                    crosshair.IsVisible = true;
+                    crosshair.Position = nearestPoint.point.Coordinates;
+                    crosshair.MarkerColor = nearestPoint.seriesColor;
+                }
+                else
+                {
+                    crosshair.IsVisible = false;
+                }
+            }
+
+            // Find the closest point among all series for tooltip positioning
             var closestPoint = nearestPoints.OrderBy(p => Math.Abs(p.point.X - mouseLocation.X)).First();
-            
-            // Show crosshair at the closest point
-            crosshair.IsVisible = true;
-            crosshair.Position = closestPoint.point.Coordinates;
-            crosshair.MarkerColor = closestPoint.seriesColor;
 
             // Build tooltip text with all nearby points
             var tooltipText = new StringBuilder();
             tooltipText.AppendLine($"X: {closestPoint.point.X:F2}");
             tooltipText.AppendLine();
 
-            foreach (var (point, label, color) in nearestPoints.OrderBy(p => p.seriesLabel))
+            foreach (var (point, label, color, _) in nearestPoints.OrderBy(p => p.seriesLabel))
             {
                 tooltipText.AppendLine($"{label}: {point.Y:F3}");
             }
@@ -889,11 +1005,26 @@ public partial class ucTimelineScope : UserControl
         }
         else
         {
-            // Hide crosshair and tooltip when no point is near
-            if (crosshair.IsVisible || tooltip.IsVisible)
+            // Hide all crosshairs and tooltip when no point is near
+            bool needsRefresh = false;
+            
+            foreach (var crosshair in crosshairs)
             {
-                crosshair.IsVisible = false;
+                if (crosshair.IsVisible)
+                {
+                    crosshair.IsVisible = false;
+                    needsRefresh = true;
+                }
+            }
+            
+            if (tooltip.IsVisible)
+            {
                 tooltip.IsVisible = false;
+                needsRefresh = true;
+            }
+            
+            if (needsRefresh)
+            {
                 plot.Refresh();
             }
         }
@@ -904,15 +1035,30 @@ public partial class ucTimelineScope : UserControl
         if (plotIndex >= detailCrosshairs.Count || plotIndex >= detailTooltips.Count)
             return;
 
-        var crosshair = detailCrosshairs[plotIndex];
+        var crosshairs = detailCrosshairs[plotIndex];
         var tooltip = detailTooltips[plotIndex];
         var plot = detailPlots[plotIndex];
 
-        // Hide crosshair and tooltip when mouse exits the plot
-        if (crosshair.IsVisible || tooltip.IsVisible)
+        // Hide all crosshairs and tooltip when mouse exits the plot
+        bool needsRefresh = false;
+        
+        foreach (var crosshair in crosshairs)
         {
-            crosshair.IsVisible = false;
+            if (crosshair.IsVisible)
+            {
+                crosshair.IsVisible = false;
+                needsRefresh = true;
+            }
+        }
+        
+        if (tooltip.IsVisible)
+        {
             tooltip.IsVisible = false;
+            needsRefresh = true;
+        }
+        
+        if (needsRefresh)
+        {
             plot.Refresh();
         }
     }
