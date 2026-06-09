@@ -145,7 +145,7 @@ public class AvaPlot : Controls.Control, IPlotControl
         UserInputProcessor.ProcessKeyUp(e);
     }
 
-    protected override void OnLostFocus(FocusChangedEventArgs e)
+    protected override void OnLostFocus(RoutedEventArgs e)
     {
         base.OnLostFocus(e);
         UserInputProcessor.ProcessLostFocus();
